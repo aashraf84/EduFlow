@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   GraduationCap, Shield, Loader2, Key, Monitor, CheckCircle2,
-  Brain, BarChart3, Users, BookOpen, Sparkles, Check, ArrowRight, ArrowLeft
+  Brain, BarChart3, Users, BookOpen, Sparkles, Check, ArrowRight, ArrowLeft,
+  Crown
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -320,6 +321,48 @@ export function LoginPage() {
     }
   }
 
+  // ============================================
+  // OWNER LOGIN HANDLER
+  // ============================================
+  const handleOwnerLogin = async () => {
+    setIsLoggingIn(true)
+    setActivationError('')
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'ashraf.saagar@gmail.com',
+          password: 'owner123',
+          schoolCode: 'OWNER',
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setActivationError(data.error || 'Owner login failed.')
+        return
+      }
+
+      login({
+        id: data.data?.user?.id || 'owner',
+        name: data.data?.user?.name || 'EduFlow Owner',
+        email: data.data?.user?.email || 'ashraf.saagar@gmail.com',
+        role: 'owner',
+        schoolId: '',
+        schoolName: 'EduFlow OS Platform',
+        isOwner: true,
+        tenantCode: 'OWNER',
+      })
+      setActivated(true)
+    } catch {
+      setActivationError('Network error. Please check your connection.')
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+
   // Go back to activation step
   const handleBackToActivation = () => {
     clearStoredActivation()
@@ -571,6 +614,17 @@ export function LoginPage() {
                   </div>
                 </div>
 
+                {/* Owner Login */}
+                <Button
+                  variant="outline"
+                  onClick={handleOwnerLogin}
+                  disabled={isLoggingIn}
+                  className="w-full rounded-lg h-9 text-sm border-dashed"
+                >
+                  <Crown className="h-3.5 w-3.5 mr-2 text-purple-500" />
+                  {isLoggingIn ? 'Signing in...' : 'Owner Login'}
+                </Button>
+
                 {/* Demo Login */}
                 <Button
                   variant="outline"
@@ -585,7 +639,7 @@ export function LoginPage() {
                 <p className="text-center text-[10px] text-muted-foreground/60 leading-relaxed">
                   New devices require a valid serial key for activation.
                   <br />
-                  Demo mode provides read-only access without activation.
+                  Owner login provides full platform management access.
                 </p>
               </motion.div>
             ) : (
