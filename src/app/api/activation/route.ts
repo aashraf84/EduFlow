@@ -13,13 +13,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!schoolCode) {
-      return NextResponse.json(
-        { success: false, error: 'School code is required' },
-        { status: 400 }
-      );
-    }
-
     // Use client-provided fingerprint or generate one from browser info
     const browser = deviceInfo?.browser || 'Unknown';
     const os = deviceInfo?.os || 'Unknown';
@@ -62,15 +55,26 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================
-    // 2. Look up tenant by schoolCode in master DB
+    // 2. Resolve tenant: use schoolCode if provided, otherwise derive from serial key
     // ============================================
-    const tenant = await masterDb.tenant.findUnique({
-      where: { code: schoolCode },
-    });
+    let tenant;
+    if (schoolCode) {
+      tenant = await masterDb.tenant.findUnique({
+        where: { code: schoolCode },
+      });
+    } else {
+      // Derive tenant from serial key's linked tenantId or client's tenantId
+      const linkedTenantId = keyRecord.tenantId || keyRecord.client?.tenantId;
+      if (linkedTenantId) {
+        tenant = await masterDb.tenant.findUnique({
+          where: { id: linkedTenantId },
+        });
+      }
+    }
 
     if (!tenant) {
       return NextResponse.json(
-        { success: false, error: 'School not found with this code' },
+        { success: false, error: 'Could not identify the school for this serial key. Please contact support.' },
         { status: 404 }
       );
     }
@@ -209,7 +213,7 @@ export async function POST(request: NextRequest) {
     // ============================================
     let schoolInfo = null;
     try {
-      const tenantDb = await getTenantDbByCode(schoolCode);
+      const tenantDb = await getTenantDbByCode(tenant.code);
       if (tenantDb) {
         const school = await tenantDb.school.findFirst();
         if (school) {

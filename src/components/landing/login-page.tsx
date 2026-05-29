@@ -171,7 +171,6 @@ export function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serialKey,
-          schoolCode,
           deviceInfo: currentDeviceInfo,
           fingerprint,
         }),
@@ -184,17 +183,19 @@ export function LoginPage() {
         return
       }
 
-      // Save activation to localStorage
+      // Derive school code and tenant name from activation response
+      const tenantCode = data.data?.tenant?.code || ''
       const tenantName = data.data?.tenant?.name || 'EduFlow School'
       saveStoredActivation({
         fingerprint,
-        schoolCode,
+        schoolCode: tenantCode,
         serialKey,
         tenantName,
         activatedAt: new Date().toISOString(),
       })
 
-      setActivationData({ tenantName, schoolCode, serialKey })
+      setActivationData({ tenantName, schoolCode: tenantCode, serialKey })
+      setSchoolCode(tenantCode)
       setStep('login')
     } catch {
       setActivationError('Network error. Please check your connection and try again.')
@@ -512,7 +513,7 @@ export function LoginPage() {
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">Activate Device</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Enter your serial key and school code to register this device
+                    Enter your serial key to activate this device
                   </p>
                 </div>
 
@@ -537,25 +538,6 @@ export function LoginPage() {
                         autoComplete="off"
                       />
                     </div>
-                  </div>
-
-                  {/* School Code */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground" htmlFor="schoolCode">
-                      School Code
-                    </label>
-                    <Input
-                      id="schoolCode"
-                      type="text"
-                      value={schoolCode}
-                      onChange={(e) => {
-                        setSchoolCode(e.target.value.toUpperCase())
-                        if (activationError) setActivationError('')
-                      }}
-                      placeholder="e.g. GIA-001"
-                      className="rounded-lg h-11 uppercase text-sm tracking-wider"
-                      autoComplete="off"
-                    />
                   </div>
 
                   {/* Device Info Card */}
@@ -586,7 +568,7 @@ export function LoginPage() {
                   {/* Activate Button */}
                   <Button
                     type="submit"
-                    disabled={isActivating || serialKey.replace(/-/g, '').length < 20 || !schoolCode}
+                    disabled={isActivating || serialKey.replace(/-/g, '').length < 20}
                     className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg h-11 text-sm font-semibold shadow-md shadow-emerald-200/50 dark:shadow-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {isActivating ? (
@@ -680,23 +662,6 @@ export function LoginPage() {
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-4">
-                  {/* School Code (read-only, pre-filled from activation) */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground" htmlFor="loginSchoolCode">
-                      School Code
-                    </label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
-                      <Input
-                        id="loginSchoolCode"
-                        type="text"
-                        value={activationData?.schoolCode || schoolCode}
-                        readOnly
-                        className="rounded-lg pl-9 h-10 uppercase text-sm bg-muted/50 text-muted-foreground"
-                      />
-                    </div>
-                  </div>
-
                   {/* Email */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground" htmlFor="email">
