@@ -511,3 +511,41 @@ Stage Summary:
 - 7 new API routes + 7 new database models
 - All systems operational and verified
 
+
+---
+Task ID: Multi-tenant PostgreSQL Migration
+Agent: Main Agent
+Task: Migrate EduFlow OS from SQLite to Neon PostgreSQL with multi-tenant architecture (separate database per client)
+
+Work Log:
+- Updated Prisma schema from SQLite to PostgreSQL provider
+- Added new platform models: Tenant, OwnerUser (master DB models)
+- Updated Client, SerialKey, Device models for tenant-based architecture (tenantId instead of schoolId)
+- Added isDemo field to User model
+- Removed schoolId/activationStatus from School model
+- Created tenant-manager.ts with dynamic PrismaClient per tenant, connection pooling, and provisioning
+- Updated db.ts to re-export from tenant-manager
+- Updated all 31 API routes (auth, activation, dashboard, students, teachers, attendance, exams, fees, communication, ai, settings, library, transport, hostel, alumni, hr, inventory, lms, admission, placement, scholarship, health, lab, owner/*) for tenant-aware connections
+- Added schoolCode parameter requirement to all tenant API routes
+- Owner routes now use masterDb from tenant-manager
+- Updated Zustand store with tenantCode, isOwner, isDemo fields
+- Updated login page with School Code field, Owner Login button, Demo Login button
+- Updated activation screen for multi-tenant schema
+- Updated app-shell sidebar for conditional rendering (owner vs tenant views)
+- Created provision.ts script for automated tenant provisioning
+- Created eduflow_gia_001 database in Neon PostgreSQL
+- Pushed Prisma schema to both master and tenant databases
+- Seeded master DB with OwnerUser, Tenant, Client, and SerialKey
+- Seeded tenant DB with school, users, students, teachers, parents, subjects, classes, attendance, exams, fees, etc.
+- Updated all 21 frontend module components to include schoolCode in API calls
+- Ran lint successfully, pushed to GitHub
+
+Stage Summary:
+- EduFlow OS now runs on Neon PostgreSQL with complete multi-tenant isolation
+- Master DB (neondb): Tenant, OwnerUser, Client, SerialKey, Device, Invoice, Quotation models
+- Tenant DB (eduflow_gia_001): School-specific models (School, User, Student, Teacher, etc.)
+- Each new client gets their own PostgreSQL database provisioned automatically
+- Login requires School Code to route to the correct tenant database
+- Owner login (Code: OWNER) authenticates against master DB
+- All data is fully isolated between tenants
+- Demo serial key: EDUF-2025-DEMO-GIA0-01AA-DEMO
