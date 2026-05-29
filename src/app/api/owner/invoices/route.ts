@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { masterDb } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 async function generateInvoiceNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const lastInvoice = await db.invoice.findFirst({
+  const lastInvoice = await masterDb.invoice.findFirst({
     where: { invoiceNumber: { startsWith: `INV-${year}-` } },
     orderBy: { invoiceNumber: 'desc' },
   });
@@ -20,7 +20,7 @@ async function generateInvoiceNumber(): Promise<string> {
 
 export async function GET() {
   try {
-    const invoices = await db.invoice.findMany({
+    const invoices = await masterDb.invoice.findMany({
       include: {
         client: { select: { id: true, companyName: true } },
         items: true,
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = await db.client.findUnique({ where: { id: clientId } });
+    const client = await masterDb.client.findUnique({ where: { id: clientId } });
     if (!client) {
       return NextResponse.json(
         { success: false, error: 'Client not found' },
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     const invoiceNumber = await generateInvoiceNumber();
 
-    const invoice = await db.invoice.create({
+    const invoice = await masterDb.invoice.create({
       data: {
         invoiceNumber,
         clientId,

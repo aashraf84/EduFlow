@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const date = searchParams.get('date') || '';
     const classId = searchParams.get('classId') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Build where clause
     const where: Prisma.AttendanceWhereInput = {};
@@ -36,7 +52,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [records, total] = await Promise.all([
-      db.attendance.findMany({
+      tenantDb.attendance.findMany({
         where,
         include: {
           student: {
@@ -54,16 +70,16 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.attendance.count({ where }),
+      tenantDb.attendance.count({ where }),
     ]);
 
     // Compute summary stats for the filtered data
     const summaryWhere = { ...where };
     const [presentCount, absentCount, lateCount, excusedCount] = await Promise.all([
-      db.attendance.count({ where: { ...summaryWhere, status: 'present' } }),
-      db.attendance.count({ where: { ...summaryWhere, status: 'absent' } }),
-      db.attendance.count({ where: { ...summaryWhere, status: 'late' } }),
-      db.attendance.count({ where: { ...summaryWhere, status: 'excused' } }),
+      tenantDb.attendance.count({ where: { ...summaryWhere, status: 'present' } }),
+      tenantDb.attendance.count({ where: { ...summaryWhere, status: 'absent' } }),
+      tenantDb.attendance.count({ where: { ...summaryWhere, status: 'late' } }),
+      tenantDb.attendance.count({ where: { ...summaryWhere, status: 'excused' } }),
     ]);
 
     return NextResponse.json({
@@ -99,6 +115,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       studentId,
       date,
@@ -106,6 +123,21 @@ export async function POST(request: NextRequest) {
       remarks,
       markedBy,
     } = body;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Validate required fields
     if (!schoolId || !studentId || !date || !status) {
@@ -125,7 +157,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if student exists
-    const student = await db.student.findUnique({
+    const student = await tenantDb.student.findUnique({
       where: { id: studentId },
     });
 
@@ -140,7 +172,7 @@ export async function POST(request: NextRequest) {
     const attendanceDate = new Date(date);
     attendanceDate.setHours(0, 0, 0, 0);
 
-    const attendance = await db.attendance.upsert({
+    const attendance = await tenantDb.attendance.upsert({
       where: {
         studentId_date: {
           studentId,

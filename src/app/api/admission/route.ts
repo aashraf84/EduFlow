@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     const where: Prisma.AdmissionWhereInput = {};
 
@@ -21,10 +37,10 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { applicantName: { contains: search } },
-        { email: { contains: search } },
-        { phone: { contains: search } },
-        { previousSchool: { contains: search } },
+        { applicantName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+        { previousSchool: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -37,26 +53,27 @@ export async function GET(request: NextRequest) {
     }
 
     const [admissions, total] = await Promise.all([
-      db.admission.findMany({
+      tenantDb.admission.findMany({
         where,
         orderBy: { applicationDate: 'desc' },
         skip,
         take: limit,
       }),
-      db.admission.count({ where }),
+      tenantDb.admission.count({ where }),
     ]);
 
     // Summary stats
+    const schoolIdFilter = schoolId || undefined;
     const [totalAdmissions, statusBreakdown, classBreakdown] = await Promise.all([
-      db.admission.count({ where: { schoolId: schoolId || undefined } }),
-      db.admission.groupBy({
+      tenantDb.admission.count({ where: { schoolId: schoolIdFilter } }),
+      tenantDb.admission.groupBy({
         by: ['status'],
-        where: { schoolId: schoolId || undefined },
+        where: { schoolId: schoolIdFilter },
         _count: { status: true },
       }),
-      db.admission.groupBy({
+      tenantDb.admission.groupBy({
         by: ['appliedClass'],
-        where: { schoolId: schoolId || undefined },
+        where: { schoolId: schoolIdFilter },
         _count: { appliedClass: true },
         orderBy: { _count: { appliedClass: 'desc' } },
       }),
@@ -98,6 +115,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       applicantName,
       email,
@@ -111,6 +129,21 @@ export async function POST(request: NextRequest) {
       remarks,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     if (!schoolId || !applicantName || !email) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: schoolId, applicantName, email' },
@@ -118,7 +151,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const admission = await db.admission.create({
+    const admission = await tenantDb.admission.create({
       data: {
         schoolId,
         applicantName,
@@ -150,7 +183,22 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { admissionId, status, reviewedBy, reviewDate, remarks } = body;
+    const { schoolCode, admissionId, status, reviewedBy, reviewDate, remarks } = body;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     if (!admissionId) {
       return NextResponse.json(
@@ -159,7 +207,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const existing = await db.admission.findUnique({
+    const existing = await tenantDb.admission.findUnique({
       where: { id: admissionId },
     });
 
@@ -197,7 +245,7 @@ export async function PATCH(request: NextRequest) {
       updateData.remarks = remarks;
     }
 
-    const admission = await db.admission.update({
+    const admission = await tenantDb.admission.update({
       where: { id: admissionId },
       data: updateData,
     });

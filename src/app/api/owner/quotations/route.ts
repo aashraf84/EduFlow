@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { masterDb } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 async function generateQuotationNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const lastQuotation = await db.quotation.findFirst({
+  const lastQuotation = await masterDb.quotation.findFirst({
     where: { quotationNumber: { startsWith: `QUO-${year}-` } },
     orderBy: { quotationNumber: 'desc' },
   });
@@ -20,7 +20,7 @@ async function generateQuotationNumber(): Promise<string> {
 
 export async function GET() {
   try {
-    const quotations = await db.quotation.findMany({
+    const quotations = await masterDb.quotation.findMany({
       include: {
         client: { select: { id: true, companyName: true } },
         items: true,
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = await db.client.findUnique({ where: { id: clientId } });
+    const client = await masterDb.client.findUnique({ where: { id: clientId } });
     if (!client) {
       return NextResponse.json(
         { success: false, error: 'Client not found' },
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     const quotationNumber = await generateQuotationNumber();
 
-    const quotation = await db.quotation.create({
+    const quotation = await masterDb.quotation.create({
       data: {
         quotationNumber,
         clientId,

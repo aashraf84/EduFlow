@@ -1,15 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Get first school if no schoolId provided
     let targetSchoolId = schoolId;
     if (!targetSchoolId) {
-      const firstSchool = await db.school.findFirst();
+      const firstSchool = await tenantDb.school.findFirst();
       if (!firstSchool) {
         return NextResponse.json(
           { success: false, error: 'No school found' },
@@ -36,22 +52,22 @@ export async function GET(request: NextRequest) {
       weakStudents,
     ] = await Promise.all([
       // Total students
-      db.student.count({
+      tenantDb.student.count({
         where: { schoolId: targetSchoolId, status: 'active' },
       }),
 
       // Total teachers
-      db.teacher.count({
+      tenantDb.teacher.count({
         where: { schoolId: targetSchoolId, status: 'active' },
       }),
 
       // Total classes
-      db.class.count({
+      tenantDb.class.count({
         where: { schoolId: targetSchoolId },
       }),
 
       // Total subjects
-      db.subject.count({
+      tenantDb.subject.count({
         where: { schoolId: targetSchoolId },
       }),
 
@@ -63,35 +79,35 @@ export async function GET(request: NextRequest) {
         tomorrow.setDate(tomorrow.getDate() + 1);
 
         const [present, absent, late, excused, total] = await Promise.all([
-          db.attendance.count({
+          tenantDb.attendance.count({
             where: {
               schoolId: targetSchoolId,
               date: { gte: today, lt: tomorrow },
               status: 'present',
             },
           }),
-          db.attendance.count({
+          tenantDb.attendance.count({
             where: {
               schoolId: targetSchoolId,
               date: { gte: today, lt: tomorrow },
               status: 'absent',
             },
           }),
-          db.attendance.count({
+          tenantDb.attendance.count({
             where: {
               schoolId: targetSchoolId,
               date: { gte: today, lt: tomorrow },
               status: 'late',
             },
           }),
-          db.attendance.count({
+          tenantDb.attendance.count({
             where: {
               schoolId: targetSchoolId,
               date: { gte: today, lt: tomorrow },
               status: 'excused',
             },
           }),
-          db.attendance.count({
+          tenantDb.attendance.count({
             where: {
               schoolId: targetSchoolId,
               date: { gte: today, lt: tomorrow },
@@ -105,23 +121,23 @@ export async function GET(request: NextRequest) {
       // Fee collection status
       (async () => {
         const [paid, pending, overdue, partial, totalAmount, totalPaid] = await Promise.all([
-          db.feePayment.count({
+          tenantDb.feePayment.count({
             where: { schoolId: targetSchoolId, status: 'paid' },
           }),
-          db.feePayment.count({
+          tenantDb.feePayment.count({
             where: { schoolId: targetSchoolId, status: 'pending' },
           }),
-          db.feePayment.count({
+          tenantDb.feePayment.count({
             where: { schoolId: targetSchoolId, status: 'overdue' },
           }),
-          db.feePayment.count({
+          tenantDb.feePayment.count({
             where: { schoolId: targetSchoolId, status: 'partial' },
           }),
-          db.feePayment.aggregate({
+          tenantDb.feePayment.aggregate({
             where: { schoolId: targetSchoolId },
             _sum: { amount: true },
           }),
-          db.feePayment.aggregate({
+          tenantDb.feePayment.aggregate({
             where: { schoolId: targetSchoolId },
             _sum: { paidAmount: true },
           }),
@@ -139,28 +155,28 @@ export async function GET(request: NextRequest) {
       })(),
 
       // Gender distribution
-      db.student.groupBy({
+      tenantDb.student.groupBy({
         by: ['gender'],
         where: { schoolId: targetSchoolId, status: 'active' },
         _count: { gender: true },
       }),
 
       // Risk level distribution
-      db.student.groupBy({
+      tenantDb.student.groupBy({
         by: ['riskLevel'],
         where: { schoolId: targetSchoolId, status: 'active' },
         _count: { riskLevel: true },
       }),
 
       // Recent announcements
-      db.announcement.findMany({
+      tenantDb.announcement.findMany({
         where: { schoolId: targetSchoolId },
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
 
       // Recent exam results for performance trend
-      db.examResult.findMany({
+      tenantDb.examResult.findMany({
         where: {
           exam: { schoolId: targetSchoolId },
         },
@@ -182,7 +198,7 @@ export async function GET(request: NextRequest) {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const attendanceByStudent = await db.attendance.groupBy({
+        const attendanceByStudent = await tenantDb.attendance.groupBy({
           by: ['studentId'],
           where: {
             schoolId: targetSchoolId,
@@ -194,7 +210,7 @@ export async function GET(request: NextRequest) {
         const lowAttendanceList = [];
         for (const record of attendanceByStudent) {
           const totalDays = record._count.id;
-          const presentDays = await db.attendance.count({
+          const presentDays = await tenantDb.attendance.count({
             where: {
               schoolId: targetSchoolId,
               studentId: record.studentId,
@@ -205,7 +221,7 @@ export async function GET(request: NextRequest) {
 
           const percentage = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
           if (percentage < 75) {
-            const student = await db.student.findUnique({
+            const student = await tenantDb.student.findUnique({
               where: { id: record.studentId },
               select: {
                 id: true,
@@ -228,7 +244,7 @@ export async function GET(request: NextRequest) {
       })(),
 
       // Unpaid/overdue fees
-      db.feePayment.findMany({
+      tenantDb.feePayment.findMany({
         where: {
           schoolId: targetSchoolId,
           status: { in: ['pending', 'overdue'] },
@@ -249,7 +265,7 @@ export async function GET(request: NextRequest) {
 
       // Weak students (average marks below 50%)
       (async () => {
-        const resultsByStudent = await db.examResult.groupBy({
+        const resultsByStudent = await tenantDb.examResult.groupBy({
           by: ['studentId'],
           _avg: { marksObtained: true },
           _count: { id: true },
@@ -260,7 +276,7 @@ export async function GET(request: NextRequest) {
 
         const weakStudentList = [];
         for (const record of resultsByStudent.slice(0, 10)) {
-          const student = await db.student.findUnique({
+          const student = await tenantDb.student.findUnique({
             where: { id: record.studentId },
             select: {
               id: true,

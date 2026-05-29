@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     if (!schoolId) {
       return NextResponse.json(
@@ -14,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch school profile
-    const school = await db.school.findUnique({
+    const school = await tenantDb.school.findUnique({
       where: { id: schoolId },
     });
 
@@ -26,7 +42,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch academic sessions with terms
-    const academicSessions = await db.academicSession.findMany({
+    const academicSessions = await tenantDb.academicSession.findMany({
       where: { schoolId },
       include: {
         terms: {
@@ -37,7 +53,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Fetch users
-    const users = await db.user.findMany({
+    const users = await tenantDb.user.findMany({
       where: { schoolId },
       select: {
         id: true,
@@ -52,7 +68,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Get total student count
-    const totalStudents = await db.student.count({
+    const totalStudents = await tenantDb.student.count({
       where: { schoolId, status: 'active' },
     });
 
@@ -78,6 +94,7 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       name,
       code,
@@ -90,6 +107,21 @@ export async function PUT(request: NextRequest) {
       website,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     if (!schoolId) {
       return NextResponse.json(
         { success: false, error: 'schoolId is required' },
@@ -98,7 +130,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check if school exists
-    const existingSchool = await db.school.findUnique({
+    const existingSchool = await tenantDb.school.findUnique({
       where: { id: schoolId },
     });
 
@@ -110,7 +142,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update school
-    const updatedSchool = await db.school.update({
+    const updatedSchool = await tenantDb.school.update({
       where: { id: schoolId },
       data: {
         ...(name !== undefined && { name }),

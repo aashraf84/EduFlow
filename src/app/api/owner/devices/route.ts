@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { masterDb } from '@/lib/tenant-manager';
 
 export async function GET() {
   try {
-    const devices = await db.device.findMany({
+    const devices = await masterDb.device.findMany({
       include: {
         client: { select: { id: true, companyName: true } },
         serialKey: { select: { id: true, key: true, plan: true } },
-        school: { select: { id: true, name: true } },
+        tenant: { select: { id: true, name: true, code: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -22,8 +22,9 @@ export async function GET() {
       client: d.client.companyName,
       serialKeyId: d.serialKeyId,
       serialKey: d.serialKey.key,
-      schoolId: d.schoolId,
-      school: d.school?.name || '',
+      tenantId: d.tenantId,
+      tenant: d.tenant?.name || '',
+      tenantCode: d.tenant?.code || '',
       status: d.status,
       approved: d.approved,
       lastAccessed: d.lastAccessedAt.toISOString(),
@@ -59,7 +60,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const device = await db.device.findUnique({ where: { id } });
+    const device = await masterDb.device.findUnique({ where: { id } });
     if (!device) {
       return NextResponse.json(
         { success: false, error: 'Device not found' },
@@ -67,7 +68,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    await db.device.update({
+    await masterDb.device.update({
       where: { id },
       data: {
         approved: action === 'approve',

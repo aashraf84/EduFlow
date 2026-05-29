@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { getTenantDbByCode } from '@/lib/tenant-manager'
 import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const schoolCode = searchParams.get('schoolCode')
     const schoolId = searchParams.get('schoolId')
     const search = searchParams.get('search') || ''
     const graduationYear = searchParams.get('graduationYear') || ''
@@ -12,6 +13,15 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10)
     const limit = parseInt(searchParams.get('limit') || '20', 10)
     const skip = (page - 1) * limit
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId) {
       return NextResponse.json({ success: false, error: 'schoolId is required' }, { status: 400 })
@@ -21,11 +31,11 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { email: { contains: search } },
-        { currentCompany: { contains: search } },
-        { currentRole: { contains: search } },
-        { department: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { currentCompany: { contains: search, mode: 'insensitive' } },
+        { currentRole: { contains: search, mode: 'insensitive' } },
+        { department: { contains: search, mode: 'insensitive' } },
       ]
     }
 
@@ -33,18 +43,18 @@ export async function GET(request: NextRequest) {
     if (department) where.department = department
 
     const [alumni, total] = await Promise.all([
-      db.alumni.findMany({ where, orderBy: { graduationYear: 'desc' }, skip, take: limit }),
-      db.alumni.count({ where }),
+      tenantDb.alumni.findMany({ where, orderBy: { graduationYear: 'desc' }, skip, take: limit }),
+      tenantDb.alumni.count({ where }),
     ])
 
     // Stats
     const [totalAlumni, employed, thisYearGraduates] = await Promise.all([
-      db.alumni.count({ where: { schoolId } }),
-      db.alumni.count({ where: { schoolId, currentCompany: { not: null } } }),
-      db.alumni.count({ where: { schoolId, graduationYear: new Date().getFullYear() } }),
+      tenantDb.alumni.count({ where: { schoolId } }),
+      tenantDb.alumni.count({ where: { schoolId, currentCompany: { not: null } } }),
+      tenantDb.alumni.count({ where: { schoolId, graduationYear: new Date().getFullYear() } }),
     ])
 
-    const companyBreakdown = await db.alumni.groupBy({
+    const companyBreakdown = await tenantDb.alumni.groupBy({
       by: ['currentCompany'],
       where: { schoolId, currentCompany: { not: null } },
       _count: { currentCompany: true },
@@ -52,14 +62,14 @@ export async function GET(request: NextRequest) {
       take: 5,
     })
 
-    const byYearData = await db.alumni.groupBy({
+    const byYearData = await tenantDb.alumni.groupBy({
       by: ['graduationYear'],
       where: { schoolId },
       _count: { graduationYear: true },
       orderBy: { graduationYear: 'asc' },
     })
 
-    const byDeptData = await db.alumni.groupBy({
+    const byDeptData = await tenantDb.alumni.groupBy({
       by: ['department'],
       where: { schoolId, department: { not: null } },
       _count: { department: true },
@@ -90,13 +100,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { schoolId, name, email, phone, graduationYear, degree, department, currentCompany, currentRole, linkedIn } = body
+    const { schoolCode, schoolId, name, email, phone, graduationYear, degree, department, currentCompany, currentRole, linkedIn } = body
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId || !name || !email) {
       return NextResponse.json({ success: false, error: 'Missing required fields: schoolId, name, email' }, { status: 400 })
     }
 
-    const alumni = await db.alumni.create({
+    const alumni = await tenantDb.alumni.create({
       data: {
         schoolId, name, email,
         phone: phone || null,

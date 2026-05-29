@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { getTenantDbByCode } from '@/lib/tenant-manager'
 import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const schoolCode = searchParams.get('schoolCode')
     const schoolId = searchParams.get('schoolId')
     const search = searchParams.get('search') || ''
     const category = searchParams.get('category') || ''
@@ -14,6 +15,15 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20', 10)
     const skip = (page - 1) * limit
 
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
+
     if (!schoolId) {
       return NextResponse.json({ success: false, error: 'schoolId is required' }, { status: 400 })
     }
@@ -22,11 +32,11 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { assetCode: { contains: search } },
-        { location: { contains: search } },
-        { assignedTo: { contains: search } },
-        { vendor: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { assetCode: { contains: search, mode: 'insensitive' } },
+        { location: { contains: search, mode: 'insensitive' } },
+        { assignedTo: { contains: search, mode: 'insensitive' } },
+        { vendor: { contains: search, mode: 'insensitive' } },
       ]
     }
 
@@ -35,20 +45,20 @@ export async function GET(request: NextRequest) {
     if (condition) where.condition = condition
 
     const [assets, total] = await Promise.all([
-      db.asset.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
-      db.asset.count({ where }),
+      tenantDb.asset.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+      tenantDb.asset.count({ where }),
     ])
 
     // Stats
     const [totalAssets, activeAssets, totalValueAgg, maintenanceDue] = await Promise.all([
-      db.asset.count({ where: { schoolId } }),
-      db.asset.count({ where: { schoolId, status: 'active' } }),
-      db.asset.aggregate({ where: { schoolId }, _sum: { purchaseCost: true } }),
-      db.asset.count({ where: { schoolId, condition: { in: ['poor', 'needs_repair'] } } }),
+      tenantDb.asset.count({ where: { schoolId } }),
+      tenantDb.asset.count({ where: { schoolId, status: 'active' } }),
+      tenantDb.asset.aggregate({ where: { schoolId }, _sum: { purchaseCost: true } }),
+      tenantDb.asset.count({ where: { schoolId, condition: { in: ['poor', 'needs_repair'] } } }),
     ])
 
     // By category
-    const byCategoryData = await db.asset.groupBy({
+    const byCategoryData = await tenantDb.asset.groupBy({
       by: ['category'],
       where: { schoolId },
       _count: { category: true },
@@ -57,7 +67,7 @@ export async function GET(request: NextRequest) {
     })
 
     // By condition
-    const byConditionData = await db.asset.groupBy({
+    const byConditionData = await tenantDb.asset.groupBy({
       by: ['condition'],
       where: { schoolId },
       _count: { condition: true },
@@ -102,13 +112,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { schoolId, name, assetCode, category, purchaseDate, purchaseCost, condition, location, assignedTo, vendor, warrantyEnd } = body
+    const { schoolCode, schoolId, name, assetCode, category, purchaseDate, purchaseCost, condition, location, assignedTo, vendor, warrantyEnd } = body
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId || !name || !assetCode || !category) {
       return NextResponse.json({ success: false, error: 'Missing required fields: schoolId, name, assetCode, category' }, { status: 400 })
     }
 
-    const asset = await db.asset.create({
+    const asset = await tenantDb.asset.create({
       data: {
         schoolId, name, assetCode, category,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),

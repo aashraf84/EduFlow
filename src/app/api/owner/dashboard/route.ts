@@ -1,43 +1,43 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { masterDb } from '@/lib/tenant-manager';
 
 export async function GET() {
   try {
     // Client stats
     const [totalClients, activeClients, trialClients] = await Promise.all([
-      db.client.count(),
-      db.client.count({ where: { status: 'active' } }),
-      db.client.count({ where: { status: 'trial' } }),
+      masterDb.client.count(),
+      masterDb.client.count({ where: { status: 'active' } }),
+      masterDb.client.count({ where: { status: 'trial' } }),
     ]);
 
     // Serial key stats
     const [activatedKeys, availableKeys, expiredKeys] = await Promise.all([
-      db.serialKey.count({ where: { status: 'activated' } }),
-      db.serialKey.count({ where: { status: 'available' } }),
-      db.serialKey.count({ where: { status: 'expired' } }),
+      masterDb.serialKey.count({ where: { status: 'activated' } }),
+      masterDb.serialKey.count({ where: { status: 'available' } }),
+      masterDb.serialKey.count({ where: { status: 'expired' } }),
     ]);
 
     // Device stats
     const [totalDevices, pendingDevices] = await Promise.all([
-      db.device.count(),
-      db.device.count({ where: { approved: false, status: 'active' } }),
+      masterDb.device.count(),
+      masterDb.device.count({ where: { approved: false, status: 'active' } }),
     ]);
 
     // Revenue stats
-    const paidInvoices = await db.invoice.findMany({
+    const paidInvoices = await masterDb.invoice.findMany({
       where: { status: 'paid' },
       select: { total: true },
     });
     const totalRevenue = paidInvoices.reduce((sum, inv) => sum + inv.total, 0);
 
-    const outstandingInvoices = await db.invoice.findMany({
+    const outstandingInvoices = await masterDb.invoice.findMany({
       where: { status: { in: ['sent', 'draft'] } },
       select: { total: true },
     });
     const outstandingAmount = outstandingInvoices.reduce((sum, inv) => sum + inv.total, 0);
 
     // Recent invoices
-    const recentInvoices = await db.invoice.findMany({
+    const recentInvoices = await masterDb.invoice.findMany({
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -47,7 +47,7 @@ export async function GET() {
     });
 
     // Recent quotations
-    const recentQuotations = await db.quotation.findMany({
+    const recentQuotations = await masterDb.quotation.findMany({
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: {

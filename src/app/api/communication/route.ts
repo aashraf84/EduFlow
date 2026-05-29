@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const type = searchParams.get('type') || '';
     const target = searchParams.get('target') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Build where clause for announcements
     const announcementWhere: Prisma.AnnouncementWhereInput = {};
@@ -45,27 +61,27 @@ export async function GET(request: NextRequest) {
     }
 
     const [announcements, announcementsTotal, notifications, notificationsTotal] = await Promise.all([
-      db.announcement.findMany({
+      tenantDb.announcement.findMany({
         where: announcementWhere,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      db.announcement.count({ where: announcementWhere }),
+      tenantDb.announcement.count({ where: announcementWhere }),
       userId
-        ? db.notification.findMany({
+        ? tenantDb.notification.findMany({
             where: notificationWhere,
             orderBy: { createdAt: 'desc' },
             skip,
             take: limit,
           })
         : [],
-      userId ? db.notification.count({ where: notificationWhere }) : 0,
+      userId ? tenantDb.notification.count({ where: notificationWhere }) : 0,
     ]);
 
     // Get unread notification count if userId provided
     const unreadCount = userId
-      ? await db.notification.count({
+      ? await tenantDb.notification.count({
           where: { userId, read: false },
         })
       : 0;
@@ -105,6 +121,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       title,
       content,
@@ -112,6 +129,21 @@ export async function POST(request: NextRequest) {
       target,
       priority,
     } = body;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Validate required fields
     if (!schoolId || !title || !content) {
@@ -149,7 +181,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create announcement
-    const announcement = await db.announcement.create({
+    const announcement = await tenantDb.announcement.create({
       data: {
         schoolId,
         title,
@@ -171,7 +203,7 @@ export async function POST(request: NextRequest) {
 
     const targetRoles = userRoleMap[target || 'all'] || userRoleMap.all;
 
-    const users = await db.user.findMany({
+    const users = await tenantDb.user.findMany({
       where: {
         schoolId,
         role: { in: targetRoles },
@@ -181,7 +213,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (users.length > 0) {
-      await db.notification.createMany({
+      await tenantDb.notification.createMany({
         data: users.map((user) => ({
           schoolId,
           userId: user.id,
@@ -208,7 +240,22 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { notificationId, read } = body;
+    const { schoolCode, notificationId, read } = body;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     if (!notificationId) {
       return NextResponse.json(
@@ -217,7 +264,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const existingNotification = await db.notification.findUnique({
+    const existingNotification = await tenantDb.notification.findUnique({
       where: { id: notificationId },
     });
 
@@ -228,7 +275,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const notification = await db.notification.update({
+    const notification = await tenantDb.notification.update({
       where: { id: notificationId },
       data: { read: read !== undefined ? read : true },
     });

@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const subjectId = searchParams.get('subjectId') || '';
     const termId = searchParams.get('termId') || '';
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Build where clause
     const where: Prisma.ExamWhereInput = {};
@@ -28,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [exams, total] = await Promise.all([
-      db.exam.findMany({
+      tenantDb.exam.findMany({
         where,
         include: {
           subject: {
@@ -56,7 +72,7 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.exam.count({ where }),
+      tenantDb.exam.count({ where }),
     ]);
 
     // Compute summary for each exam
@@ -115,6 +131,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       subjectId,
       termId,
@@ -126,6 +143,21 @@ export async function POST(request: NextRequest) {
       duration,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     // Validate required fields
     if (!schoolId || !subjectId || !termId || !name || totalMarks === undefined || passingMarks === undefined || !date) {
       return NextResponse.json(
@@ -135,7 +167,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate subject exists
-    const subject = await db.subject.findUnique({
+    const subject = await tenantDb.subject.findUnique({
       where: { id: subjectId },
     });
 
@@ -147,7 +179,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate term exists
-    const term = await db.term.findUnique({
+    const term = await tenantDb.term.findUnique({
       where: { id: termId },
     });
 
@@ -158,7 +190,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const exam = await db.exam.create({
+    const exam = await tenantDb.exam.create({
       data: {
         schoolId,
         subjectId,
@@ -196,7 +228,22 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { resultId, marksObtained, grade, remarks } = body;
+    const { schoolCode, resultId, marksObtained, grade, remarks } = body;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     if (!resultId) {
       return NextResponse.json(
@@ -206,7 +253,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check if result exists
-    const existingResult = await db.examResult.findUnique({
+    const existingResult = await tenantDb.examResult.findUnique({
       where: { id: resultId },
     });
 
@@ -228,7 +275,7 @@ export async function PUT(request: NextRequest) {
       updateData.remarks = remarks;
     }
 
-    const result = await db.examResult.update({
+    const result = await tenantDb.examResult.update({
       where: { id: resultId },
       data: updateData,
       include: {

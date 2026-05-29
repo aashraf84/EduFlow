@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { masterDb, getTenantDbByCode } from '@/lib/tenant-manager';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,16 +13,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'School code is required' },
+        { status: 400 }
+      );
+    }
+
     // Generate device fingerprint from browser info
     const browser = deviceInfo?.browser || 'Unknown';
     const os = deviceInfo?.os || 'Unknown';
     const deviceFingerprint = `fp-${browser.toLowerCase().replace(/\s/g, '')}-${os.toLowerCase().replace(/\s/g, '')}-${Date.now().toString(36)}`;
     const deviceName = `${browser} on ${os}`;
 
-    // Find the serial key
-    const keyRecord = await db.serialKey.findUnique({
+    // ============================================
+    // 1. Look up serial key in master DB
+    // ============================================
+    const keyRecord = await masterDb.serialKey.findUnique({
       where: { key: serialKey },
-      include: { devices: true, client: true },
+      include: { client: true, devices: true },
     });
 
     if (!keyRecord) {
@@ -42,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     // Check if key is expired
     if (keyRecord.expiresAt && new Date() > keyRecord.expiresAt) {
-      await db.serialKey.update({
+      await masterDb.serialKey.update({
         where: { id: keyRecord.id },
         data: { status: 'expired' },
       });
@@ -52,19 +61,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find school by code if provided
-    let school = null;
-    if (schoolCode) {
-      school = await db.school.findUnique({ where: { code: schoolCode } });
-      if (!school) {
-        return NextResponse.json(
-          { success: false, error: 'School not found with this code' },
-          { status: 404 }
-        );
-      }
+    // ============================================
+    // 2. Look up tenant by schoolCode in master DB
+    // ============================================
+    const tenant = await masterDb.tenant.findUnique({
+      where: { code: schoolCode },
+    });
 
-      // Verify school's clientId matches key's clientId
-      if (school.clientId && school.clientId !== keyRecord.clientId) {
+    if (!tenant) {
+      return NextResponse.json(
+        { success: false, error: 'School not found with this code' },
+        { status: 404 }
+      );
+    }
+
+    if (tenant.status !== 'active') {
+      return NextResponse.json(
+        { success: false, error: 'This school account is not active' },
+        { status: 403 }
+      );
+    }
+
+    // ============================================
+    // 3. Verify that the tenant's client matches the serial key's client
+    //    SerialKey has tenantId; if already linked, it must match the requesting tenant.
+    //    If not yet linked, verify via the Client-Tenant relationship.
+    // ============================================
+    if (keyRecord.tenantId && keyRecord.tenantId !== tenant.id) {
+      return NextResponse.json(
+        { success: false, error: 'This serial key is not assigned to your school' },
+        { status: 403 }
+      );
+    }
+
+    // If the key is not yet linked to a tenant, verify the client-tenant relationship
+    if (!keyRecord.tenantId) {
+      const keyClient = keyRecord.client;
+      if (keyClient.tenantId && keyClient.tenantId !== tenant.id) {
         return NextResponse.json(
           { success: false, error: 'This serial key is not assigned to your school' },
           { status: 403 }
@@ -72,12 +105,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If key has a linked school, use that
-    if (!school && keyRecord.schoolId) {
-      school = await db.school.findUnique({ where: { id: keyRecord.schoolId } });
-    }
-
-    // Check device count
+    // ============================================
+    // 4. Check device count against maxDevices
+    // ============================================
     const activeDeviceCount = keyRecord.devices.filter(
       (d) => d.status === 'active'
     ).length;
@@ -89,8 +119,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if this exact device fingerprint already exists
-    const existingDevice = await db.device.findUnique({
+    // ============================================
+    // 5. Check if this exact device fingerprint already exists
+    // ============================================
+    const existingDevice = await masterDb.device.findUnique({
       where: {
         serialKeyId_fingerprint: {
           serialKeyId: keyRecord.id,
@@ -103,8 +135,8 @@ export async function POST(request: NextRequest) {
     let isNewDevice = false;
 
     if (existingDevice) {
-      // Device already registered
-      device = await db.device.update({
+      // Device already registered — update last accessed
+      device = await masterDb.device.update({
         where: { id: existingDevice.id },
         data: { lastAccessedAt: new Date() },
       });
@@ -120,15 +152,15 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      // New device
+      // New device registration
       isNewDevice = true;
       const isFirstDevice = keyRecord.devices.length === 0;
 
-      device = await db.device.create({
+      device = await masterDb.device.create({
         data: {
           clientId: keyRecord.clientId,
           serialKeyId: keyRecord.id,
-          schoolId: school?.id || null,
+          tenantId: tenant.id,
           fingerprint: deviceFingerprint,
           deviceName: deviceName,
           browser,
@@ -139,11 +171,11 @@ export async function POST(request: NextRequest) {
       });
 
       if (!isFirstDevice) {
-        // Update serial key and school even for pending device
-        await db.serialKey.update({
+        // Update serial key even for pending device — link tenantId
+        await masterDb.serialKey.update({
           where: { id: keyRecord.id },
           data: {
-            schoolId: school?.id || keyRecord.schoolId,
+            tenantId: tenant.id,
             status: 'activated',
             activatedAt: keyRecord.activatedAt || new Date(),
           },
@@ -160,37 +192,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update serial key
-    await db.serialKey.update({
+    // ============================================
+    // 6. On successful activation: update SerialKey status and link tenantId
+    // ============================================
+    await masterDb.serialKey.update({
       where: { id: keyRecord.id },
       data: {
-        schoolId: school?.id || keyRecord.schoolId,
+        tenantId: tenant.id,
         status: 'activated',
         activatedAt: keyRecord.activatedAt || new Date(),
       },
     });
 
-    // Update school if found
-    if (school) {
-      await db.school.update({
-        where: { id: school.id },
-        data: {
-          activationStatus: 'active',
-          clientId: keyRecord.clientId,
-        },
-      });
+    // ============================================
+    // 7. Look up school info from tenant DB for the response
+    // ============================================
+    let schoolInfo = null;
+    try {
+      const tenantDb = await getTenantDbByCode(schoolCode);
+      if (tenantDb) {
+        const school = await tenantDb.school.findFirst();
+        if (school) {
+          schoolInfo = {
+            id: school.id,
+            name: school.name,
+            code: school.code,
+          };
+        }
+      }
+    } catch {
+      // Non-critical — activation still succeeds even if we can't read school info
     }
 
     return NextResponse.json({
       success: true,
       data: {
         activated: true,
-        school: school ? {
-          id: school.id,
-          name: school.name,
-          code: school.code,
-          activationStatus: 'active',
-        } : null,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          code: tenant.code,
+          plan: tenant.plan,
+          status: tenant.status,
+        },
+        school: schoolInfo,
         serialKey: {
           id: keyRecord.id,
           key: keyRecord.key,
@@ -226,37 +271,75 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const school = await db.school.findUnique({
+    // ============================================
+    // Look up tenant by schoolCode from master DB
+    // ============================================
+    const tenant = await masterDb.tenant.findUnique({
       where: { code: schoolCode },
       include: {
-        serialKey: { include: { devices: true } },
+        serialKeys: { include: { devices: true } },
         devices: true,
       },
     });
 
-    if (!school) {
+    if (!tenant) {
       return NextResponse.json(
         { success: false, error: 'School not found' },
         { status: 404 }
       );
     }
 
+    // Derive activation status from the tenant's serial keys
+    const hasActivatedKey = tenant.serialKeys.some(
+      (key) => key.status === 'activated'
+    );
+    const activationStatus = hasActivatedKey ? 'active' : 'inactive';
+
+    // Get school info from tenant DB
+    let schoolInfo = null;
+    try {
+      const tenantDb = await getTenantDbByCode(schoolCode);
+      if (tenantDb) {
+        const school = await tenantDb.school.findFirst();
+        if (school) {
+          schoolInfo = {
+            id: school.id,
+            name: school.name,
+            code: school.code,
+          };
+        }
+      }
+    } catch {
+      // Non-critical — return tenant info without school details
+    }
+
     return NextResponse.json({
       success: true,
       data: {
-        activationStatus: school.activationStatus,
-        school: { id: school.id, name: school.name, code: school.code },
-        serialKey: school.serialKey ? {
-          key: school.serialKey.key,
-          plan: school.serialKey.plan,
-          status: school.serialKey.status,
-          maxDevices: school.serialKey.maxDevices,
-        } : null,
-        devices: school.devices.map((d) => ({
+        activationStatus,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          code: tenant.code,
+          plan: tenant.plan,
+          status: tenant.status,
+        },
+        school: schoolInfo,
+        serialKeys: tenant.serialKeys.map((key) => ({
+          id: key.id,
+          key: key.key,
+          plan: key.plan,
+          status: key.status,
+          maxDevices: key.maxDevices,
+          maxStudents: key.maxStudents,
+        })),
+        devices: tenant.devices.map((d) => ({
           id: d.id,
           deviceName: d.deviceName,
           approved: d.approved,
           status: d.status,
+          browser: d.browser,
+          os: d.os,
         })),
       },
     });

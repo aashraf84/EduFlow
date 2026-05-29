@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { masterDb } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 function generateSerialKey(): string {
@@ -17,10 +17,10 @@ function generateSerialKey(): string {
 
 export async function GET() {
   try {
-    const serialKeys = await db.serialKey.findMany({
+    const serialKeys = await masterDb.serialKey.findMany({
       include: {
         client: { select: { id: true, companyName: true } },
-        school: { select: { id: true, name: true } },
+        tenant: { select: { id: true, name: true, code: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -30,8 +30,9 @@ export async function GET() {
       key: sk.key,
       clientId: sk.clientId,
       client: sk.client.companyName,
-      schoolId: sk.schoolId,
-      school: sk.school?.name || '',
+      tenantId: sk.tenantId,
+      tenant: sk.tenant?.name || '',
+      tenantCode: sk.tenant?.code || '',
       plan: sk.plan,
       maxDevices: sk.maxDevices,
       maxStudents: sk.maxStudents,
@@ -55,7 +56,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { clientId, plan, maxDevices, maxStudents, notes } = body;
+    const { clientId, plan, maxDevices, maxStudents, notes, tenantId } = body;
 
     if (!clientId) {
       return NextResponse.json(
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = await db.client.findUnique({ where: { id: clientId } });
+    const client = await masterDb.client.findUnique({ where: { id: clientId } });
     if (!client) {
       return NextResponse.json(
         { success: false, error: 'Client not found' },
@@ -73,16 +74,17 @@ export async function POST(request: NextRequest) {
     }
 
     let key = generateSerialKey();
-    let existingKey = await db.serialKey.findUnique({ where: { key } });
+    let existingKey = await masterDb.serialKey.findUnique({ where: { key } });
     while (existingKey) {
       key = generateSerialKey();
-      existingKey = await db.serialKey.findUnique({ where: { key } });
+      existingKey = await masterDb.serialKey.findUnique({ where: { key } });
     }
 
-    const serialKey = await db.serialKey.create({
+    const serialKey = await masterDb.serialKey.create({
       data: {
         key,
         clientId,
+        tenantId: tenantId || null,
         plan: plan || 'starter',
         maxDevices: maxDevices || 3,
         maxStudents: maxStudents || 500,

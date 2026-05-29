@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { getTenantDbByCode } from '@/lib/tenant-manager'
 import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const schoolCode = searchParams.get('schoolCode')
     const schoolId = searchParams.get('schoolId')
     const search = searchParams.get('search') || ''
-    const tab = searchParams.get('tab') || 'staff'
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId) {
       return NextResponse.json({ success: false, error: 'schoolId is required' }, { status: 400 })
@@ -17,15 +26,15 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { employeeId: { contains: search } },
-        { email: { contains: search } },
-        { designation: { contains: search } },
-        { department: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { employeeId: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { designation: { contains: search, mode: 'insensitive' } },
+        { department: { contains: search, mode: 'insensitive' } },
       ]
     }
 
-    const staff = await db.staffMember.findMany({
+    const staff = await tenantDb.staffMember.findMany({
       where,
       include: {
         payroll: { orderBy: { month: 'desc' }, take: 3 },
@@ -38,10 +47,10 @@ export async function GET(request: NextRequest) {
     const totalStaff = staff.length
     const activeStaff = staff.filter(s => s.status === 'active').length
     const totalPayroll = staff.reduce((acc, s) => acc + (s.salary || 0), 0)
-    const pendingLeaves = await db.leaveRecord.count({ where: { schoolId, status: 'pending' } })
+    const pendingLeaves = await tenantDb.leaveRecord.count({ where: { schoolId, status: 'pending' } })
 
     // Department distribution
-    const deptData = await db.staffMember.groupBy({
+    const deptData = await tenantDb.staffMember.groupBy({
       by: ['department'],
       where: { schoolId, department: { not: null } },
       _count: { department: true },
@@ -49,7 +58,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Payroll records
-    const payrollRecords = await db.payrollRecord.findMany({
+    const payrollRecords = await tenantDb.payrollRecord.findMany({
       where: { schoolId },
       include: { staff: { select: { id: true, name: true, employeeId: true, department: true } } },
       orderBy: { month: 'desc' },
@@ -57,7 +66,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Monthly payroll trend
-    const payrollTrend = await db.payrollRecord.groupBy({
+    const payrollTrend = await tenantDb.payrollRecord.groupBy({
       by: ['month'],
       where: { schoolId, status: 'paid' },
       _sum: { netPay: true },
@@ -65,7 +74,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Leave records
-    const leaveRecords = await db.leaveRecord.findMany({
+    const leaveRecords = await tenantDb.leaveRecord.findMany({
       where: { schoolId },
       include: { staff: { select: { id: true, name: true, employeeId: true, department: true } } },
       orderBy: { createdAt: 'desc' },
@@ -99,7 +108,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { action, schoolId } = body
+    const { schoolCode, action, schoolId } = body
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId) {
       return NextResponse.json({ success: false, error: 'schoolId is required' }, { status: 400 })
@@ -110,7 +128,7 @@ export async function POST(request: NextRequest) {
       if (!name || !employeeId) {
         return NextResponse.json({ success: false, error: 'name and employeeId required' }, { status: 400 })
       }
-      const staffMember = await db.staffMember.create({
+      const staffMember = await tenantDb.staffMember.create({
         data: {
           schoolId, name, employeeId,
           email: email || null,
@@ -135,7 +153,7 @@ export async function POST(request: NextRequest) {
       const a = parseFloat(allowances) || 0
       const d = parseFloat(deductions) || 0
       const b = parseFloat(basicPay)
-      const payroll = await db.payrollRecord.create({
+      const payroll = await tenantDb.payrollRecord.create({
         data: { schoolId, staffId, month, basicPay: b, allowances: a, deductions: d, netPay: b + a - d, status: 'pending' },
       })
       return NextResponse.json({ success: true, data: { payroll } }, { status: 201 })
@@ -146,7 +164,7 @@ export async function POST(request: NextRequest) {
       if (!staffId || !leaveType || !startDate || !endDate || !days) {
         return NextResponse.json({ success: false, error: 'staffId, leaveType, startDate, endDate, days required' }, { status: 400 })
       }
-      const leave = await db.leaveRecord.create({
+      const leave = await tenantDb.leaveRecord.create({
         data: {
           schoolId, staffId, leaveType,
           startDate: new Date(startDate),
@@ -164,7 +182,7 @@ export async function POST(request: NextRequest) {
     if (!name || !employeeId) {
       return NextResponse.json({ success: false, error: 'name and employeeId required' }, { status: 400 })
     }
-    const staffMember = await db.staffMember.create({
+    const staffMember = await tenantDb.staffMember.create({
       data: {
         schoolId, name, employeeId,
         email: email || null,
@@ -193,14 +211,23 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
-    const { action } = body
+    const { schoolCode, action } = body
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (action === 'updateLeave') {
       const { leaveId, status } = body
       if (!leaveId || !status) {
         return NextResponse.json({ success: false, error: 'leaveId and status required' }, { status: 400 })
       }
-      const leave = await db.leaveRecord.update({ where: { id: leaveId }, data: { status } })
+      const leave = await tenantDb.leaveRecord.update({ where: { id: leaveId }, data: { status } })
       return NextResponse.json({ success: true, data: { leave } })
     }
 
@@ -209,7 +236,7 @@ export async function PATCH(request: NextRequest) {
       if (!payrollId) {
         return NextResponse.json({ success: false, error: 'payrollId required' }, { status: 400 })
       }
-      const payroll = await db.payrollRecord.update({
+      const payroll = await tenantDb.payrollRecord.update({
         where: { id: payrollId },
         data: { status: 'paid', paidDate: new Date() },
       })

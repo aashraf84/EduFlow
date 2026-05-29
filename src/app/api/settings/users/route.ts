@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { schoolId, name, email, role, phone } = body;
+    const { schoolCode, schoolId, name, email, role, phone } = body;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     if (!schoolId || !name || !email) {
       return NextResponse.json(
@@ -14,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if email already exists
-    const existingUser = await db.user.findUnique({
+    const existingUser = await tenantDb.user.findUnique({
       where: { email },
     });
 
@@ -26,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create user
-    const user = await db.user.create({
+    const user = await tenantDb.user.create({
       data: {
         schoolId,
         email,

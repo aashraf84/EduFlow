@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const classId = searchParams.get('classId') || '';
@@ -13,6 +14,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Build where clause
     const where: Prisma.StudentWhereInput = {};
@@ -23,10 +39,10 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { firstName: { contains: search } },
-        { lastName: { contains: search } },
-        { admissionNo: { contains: search } },
-        { user: { email: { contains: search } } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { admissionNo: { contains: search, mode: 'insensitive' } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
@@ -43,7 +59,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [students, total] = await Promise.all([
-      db.student.findMany({
+      tenantDb.student.findMany({
         where,
         include: {
           user: {
@@ -80,7 +96,7 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.student.count({ where }),
+      tenantDb.student.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -108,6 +124,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       firstName,
       lastName,
@@ -125,6 +142,21 @@ export async function POST(request: NextRequest) {
       phone,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     // Validate required fields
     if (!schoolId || !firstName || !lastName || !email || !admissionNo) {
       return NextResponse.json(
@@ -134,7 +166,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if admission number already exists
-    const existingAdmission = await db.student.findUnique({
+    const existingAdmission = await tenantDb.student.findUnique({
       where: { admissionNo },
     });
 
@@ -146,7 +178,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if email already exists
-    const existingUser = await db.user.findUnique({
+    const existingUser = await tenantDb.user.findUnique({
       where: { email },
     });
 
@@ -158,7 +190,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create user first
-    const user = await db.user.create({
+    const user = await tenantDb.user.create({
       data: {
         schoolId,
         email,
@@ -171,7 +203,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create student
-    const student = await db.student.create({
+    const student = await tenantDb.student.create({
       data: {
         schoolId,
         userId: user.id,

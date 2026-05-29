@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     const where: Prisma.PlacementWhereInput = {};
 
@@ -21,11 +37,11 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { companyName: { contains: search } },
-        { position: { contains: search } },
-        { student: { firstName: { contains: search } } },
-        { student: { lastName: { contains: search } } },
-        { student: { admissionNo: { contains: search } } },
+        { companyName: { contains: search, mode: 'insensitive' } },
+        { position: { contains: search, mode: 'insensitive' } },
+        { student: { firstName: { contains: search, mode: 'insensitive' } } },
+        { student: { lastName: { contains: search, mode: 'insensitive' } } },
+        { student: { admissionNo: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
@@ -38,7 +54,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [placements, total] = await Promise.all([
-      db.placement.findMany({
+      tenantDb.placement.findMany({
         where,
         include: {
           student: {
@@ -55,28 +71,29 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.placement.count({ where }),
+      tenantDb.placement.count({ where }),
     ]);
 
     // Company stats
+    const schoolIdFilter = schoolId || undefined;
     const [totalPlacements, companyBreakdown, typeBreakdown, avgPackage] = await Promise.all([
-      db.placement.count({ where: { schoolId: schoolId || undefined } }),
-      db.placement.groupBy({
+      tenantDb.placement.count({ where: { schoolId: schoolIdFilter } }),
+      tenantDb.placement.groupBy({
         by: ['companyName'],
-        where: { schoolId: schoolId || undefined },
+        where: { schoolId: schoolIdFilter },
         _count: { companyName: true },
         _sum: { package: true },
         orderBy: { _count: { companyName: 'desc' } },
         take: 10,
       }),
-      db.placement.groupBy({
+      tenantDb.placement.groupBy({
         by: ['type'],
-        where: { schoolId: schoolId || undefined },
+        where: { schoolId: schoolIdFilter },
         _count: { type: true },
         _sum: { package: true },
       }),
-      db.placement.aggregate({
-        where: { schoolId: schoolId || undefined, package: { not: null } },
+      tenantDb.placement.aggregate({
+        where: { schoolId: schoolIdFilter, package: { not: null } },
         _avg: { package: true },
         _max: { package: true },
         _min: { package: true },
@@ -124,6 +141,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       studentId,
       companyName,
@@ -134,6 +152,21 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     if (!schoolId || !studentId || !companyName || !position) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: schoolId, studentId, companyName, position' },
@@ -141,7 +174,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const student = await db.student.findUnique({ where: { id: studentId } });
+    const student = await tenantDb.student.findUnique({ where: { id: studentId } });
     if (!student) {
       return NextResponse.json(
         { success: false, error: 'Student not found' },
@@ -149,7 +182,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const placement = await db.placement.create({
+    const placement = await tenantDb.placement.create({
       data: {
         schoolId,
         studentId,

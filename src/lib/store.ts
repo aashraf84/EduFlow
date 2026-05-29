@@ -18,6 +18,8 @@ export interface User {
   avatar?: string
   isDemo?: boolean
   isViewOnly?: boolean
+  isOwner?: boolean
+  tenantCode?: string
 }
 
 interface AppState {
@@ -33,6 +35,8 @@ interface AppState {
   isDemo: boolean
   isViewOnly: boolean
   isActivated: boolean
+  isOwner: boolean
+  tenantCode: string
   login: (user: User) => void
   logout: () => void
   setActivated: (v: boolean) => void
@@ -60,13 +64,17 @@ export const useAppStore = create<AppState>((set) => ({
   isDemo: false,
   isViewOnly: false,
   isActivated: false,
+  isOwner: false,
+  tenantCode: '',
   login: (user) => set({ 
     user, 
     isAuthenticated: true, 
     view: 'app', 
-    module: 'dashboard',
+    module: user.isOwner ? 'owner' : 'dashboard',
     isDemo: user.isDemo ?? false,
     isViewOnly: user.isViewOnly ?? false,
+    isOwner: user.isOwner ?? false,
+    tenantCode: user.tenantCode ?? '',
   }),
   logout: () => set({ 
     user: null, 
@@ -76,6 +84,8 @@ export const useAppStore = create<AppState>((set) => ({
     isDemo: false,
     isViewOnly: false,
     isActivated: false,
+    isOwner: false,
+    tenantCode: '',
   }),
   setActivated: (v) => set({ isActivated: v }),
 

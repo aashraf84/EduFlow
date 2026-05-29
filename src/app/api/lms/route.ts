@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     const where: Prisma.CourseWhereInput = {};
 
@@ -20,10 +36,10 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { title: { contains: search } },
-        { code: { contains: search } },
-        { instructor: { contains: search } },
-        { description: { contains: search } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { code: { contains: search, mode: 'insensitive' } },
+        { instructor: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -32,7 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [courses, total] = await Promise.all([
-      db.course.findMany({
+      tenantDb.course.findMany({
         where,
         include: {
           _count: {
@@ -47,7 +63,7 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.course.count({ where }),
+      tenantDb.course.count({ where }),
     ]);
 
     // Enrich with computed enrollment stats
@@ -78,15 +94,16 @@ export async function GET(request: NextRequest) {
     });
 
     // Summary stats
+    const schoolIdFilter = schoolId || undefined;
     const [totalCourses, publishedCourses, totalEnrollments, statusBreakdown] = await Promise.all([
-      db.course.count({ where: { schoolId: schoolId || undefined } }),
-      db.course.count({ where: { schoolId: schoolId || undefined, status: 'published' } }),
-      db.courseEnrollment.count({
-        where: { course: { schoolId: schoolId || undefined } },
+      tenantDb.course.count({ where: { schoolId: schoolIdFilter } }),
+      tenantDb.course.count({ where: { schoolId: schoolIdFilter, status: 'published' } }),
+      tenantDb.courseEnrollment.count({
+        where: { course: { schoolId: schoolIdFilter } },
       }),
-      db.course.groupBy({
+      tenantDb.course.groupBy({
         by: ['status'],
-        where: { schoolId: schoolId || undefined },
+        where: { schoolId: schoolIdFilter },
         _count: { status: true },
       }),
     ]);
@@ -126,6 +143,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       title,
       code,
@@ -138,6 +156,21 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     if (!schoolId || !title) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: schoolId, title' },
@@ -145,7 +178,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const course = await db.course.create({
+    const course = await tenantDb.course.create({
       data: {
         schoolId,
         title,

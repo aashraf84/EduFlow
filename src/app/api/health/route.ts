@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const studentId = searchParams.get('studentId') || '';
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     const where: Prisma.HealthRecordWhereInput = {};
 
@@ -24,17 +40,17 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { student: { firstName: { contains: search } } },
-        { student: { lastName: { contains: search } } },
-        { student: { admissionNo: { contains: search } } },
-        { allergies: { contains: search } },
-        { conditions: { contains: search } },
-        { doctorName: { contains: search } },
+        { student: { firstName: { contains: search, mode: 'insensitive' } } },
+        { student: { lastName: { contains: search, mode: 'insensitive' } } },
+        { student: { admissionNo: { contains: search, mode: 'insensitive' } } },
+        { allergies: { contains: search, mode: 'insensitive' } },
+        { conditions: { contains: search, mode: 'insensitive' } },
+        { doctorName: { contains: search, mode: 'insensitive' } },
       ];
     }
 
     const [records, total] = await Promise.all([
-      db.healthRecord.findMany({
+      tenantDb.healthRecord.findMany({
         where,
         include: {
           student: {
@@ -51,20 +67,21 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.healthRecord.count({ where }),
+      tenantDb.healthRecord.count({ where }),
     ]);
 
     // Summary stats
+    const schoolIdFilter = schoolId || undefined;
     const [totalRecords, allergyCount, conditionCount, visionCount] = await Promise.all([
-      db.healthRecord.count({ where: { schoolId: schoolId || undefined } }),
-      db.healthRecord.count({
-        where: { schoolId: schoolId || undefined, allergies: { not: null } },
+      tenantDb.healthRecord.count({ where: { schoolId: schoolIdFilter } }),
+      tenantDb.healthRecord.count({
+        where: { schoolId: schoolIdFilter, allergies: { not: null } },
       }),
-      db.healthRecord.count({
-        where: { schoolId: schoolId || undefined, conditions: { not: null } },
+      tenantDb.healthRecord.count({
+        where: { schoolId: schoolIdFilter, conditions: { not: null } },
       }),
-      db.healthRecord.count({
-        where: { schoolId: schoolId || undefined, vision: 'Needs correction' },
+      tenantDb.healthRecord.count({
+        where: { schoolId: schoolIdFilter, vision: 'Needs correction' },
       }),
     ]);
 
@@ -100,6 +117,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       studentId,
       height,
@@ -114,6 +132,21 @@ export async function POST(request: NextRequest) {
       notes,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     if (!schoolId || !studentId) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: schoolId, studentId' },
@@ -122,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if student exists
-    const student = await db.student.findUnique({ where: { id: studentId } });
+    const student = await tenantDb.student.findUnique({ where: { id: studentId } });
     if (!student) {
       return NextResponse.json(
         { success: false, error: 'Student not found' },
@@ -131,14 +164,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if health record already exists for this student
-    const existing = await db.healthRecord.findFirst({
+    const existing = await tenantDb.healthRecord.findFirst({
       where: { studentId },
     });
 
     let record;
     if (existing) {
       // Update existing record
-      record = await db.healthRecord.update({
+      record = await tenantDb.healthRecord.update({
         where: { id: existing.id },
         data: {
           height: height !== undefined ? parseFloat(String(height)) : undefined,
@@ -165,7 +198,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Create new record
-      record = await db.healthRecord.create({
+      record = await tenantDb.healthRecord.create({
         data: {
           schoolId,
           studentId,

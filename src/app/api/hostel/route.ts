@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { getTenantDbByCode } from '@/lib/tenant-manager'
 import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const schoolCode = searchParams.get('schoolCode')
     const schoolId = searchParams.get('schoolId')
     const search = searchParams.get('search') || ''
     const type = searchParams.get('type') || ''
@@ -12,6 +13,15 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10)
     const limit = parseInt(searchParams.get('limit') || '20', 10)
     const skip = (page - 1) * limit
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId) {
       return NextResponse.json({ success: false, error: 'schoolId is required' }, { status: 400 })
@@ -21,8 +31,8 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { wardenName: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { wardenName: { contains: search, mode: 'insensitive' } },
       ]
     }
 
@@ -30,7 +40,7 @@ export async function GET(request: NextRequest) {
     if (status) where.status = status
 
     const [hostels, total] = await Promise.all([
-      db.hostel.findMany({
+      tenantDb.hostel.findMany({
         where,
         include: {
           rooms: {
@@ -49,16 +59,16 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.hostel.count({ where }),
+      tenantDb.hostel.count({ where }),
     ])
 
     // Overall stats
     const [totalRooms, totalOccupants] = await Promise.all([
-      db.hostelRoom.count({ where: { hostel: { schoolId } } }),
-      db.hostelAllocation.count({ where: { schoolId, status: 'active' } }),
+      tenantDb.hostelRoom.count({ where: { hostel: { schoolId } } }),
+      tenantDb.hostelAllocation.count({ where: { schoolId, status: 'active' } }),
     ])
 
-    const totalCapacity = await db.hostelRoom.aggregate({
+    const totalCapacity = await tenantDb.hostelRoom.aggregate({
       where: { hostel: { schoolId } },
       _sum: { capacity: true },
     })
@@ -75,7 +85,7 @@ export async function GET(request: NextRequest) {
     })
 
     // All allocations for tracking
-    const allocations = await db.hostelAllocation.findMany({
+    const allocations = await tenantDb.hostelAllocation.findMany({
       where: { schoolId },
       include: {
         room: { include: { hostel: { select: { name: true } } } },
@@ -109,7 +119,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { action, schoolId } = body
+    const { schoolCode, action, schoolId } = body
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId) {
       return NextResponse.json({ success: false, error: 'schoolId is required' }, { status: 400 })
@@ -120,7 +139,7 @@ export async function POST(request: NextRequest) {
       if (!name) {
         return NextResponse.json({ success: false, error: 'name is required' }, { status: 400 })
       }
-      const hostel = await db.hostel.create({
+      const hostel = await tenantDb.hostel.create({
         data: {
           schoolId, name,
           type: type || 'boys',
@@ -139,7 +158,7 @@ export async function POST(request: NextRequest) {
       if (!hostelId || !roomNumber) {
         return NextResponse.json({ success: false, error: 'hostelId and roomNumber required' }, { status: 400 })
       }
-      const room = await db.hostelRoom.create({
+      const room = await tenantDb.hostelRoom.create({
         data: {
           hostelId,
           roomNumber,
@@ -157,7 +176,7 @@ export async function POST(request: NextRequest) {
     if (!name) {
       return NextResponse.json({ success: false, error: 'name is required' }, { status: 400 })
     }
-    const hostel = await db.hostel.create({
+    const hostel = await tenantDb.hostel.create({
       data: {
         schoolId, name,
         type: type || 'boys',

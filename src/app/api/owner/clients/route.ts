@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { masterDb } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET() {
   try {
-    const clients = await db.client.findMany({
+    const clients = await masterDb.client.findMany({
       include: {
         _count: {
           select: {
-            schools: true,
             serialKeys: true,
             devices: true,
+            invoices: true,
+            quotations: true,
           },
         },
       },
@@ -32,9 +33,11 @@ export async function GET() {
       logo: client.logo,
       status: client.status,
       notes: client.notes,
-      schoolsCount: client._count.schools,
+      tenantId: client.tenantId,
       keysCount: client._count.serialKeys,
       devicesCount: client._count.devices,
+      invoicesCount: client._count.invoices,
+      quotationsCount: client._count.quotations,
       createdAt: client.createdAt,
       updatedAt: client.updatedAt,
     }));
@@ -52,7 +55,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { company, contactPerson, email, phone, address, city, state, country, website, taxId, status, notes } = body;
+    const { company, contactPerson, email, phone, address, city, state, country, website, taxId, status, notes, tenantId } = body;
 
     if (!company || !contactPerson || !email) {
       return NextResponse.json(
@@ -61,7 +64,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = await db.client.create({
+    const client = await masterDb.client.create({
       data: {
         companyName: company,
         contactPerson,
@@ -75,6 +78,7 @@ export async function POST(request: NextRequest) {
         taxId: taxId || null,
         status: status || 'active',
         notes: notes || null,
+        tenantId: tenantId || null,
       },
     });
 

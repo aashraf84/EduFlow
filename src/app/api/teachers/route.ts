@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Build where clause
     const where: Prisma.TeacherWhereInput = {};
@@ -22,10 +38,10 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { firstName: { contains: search } },
-        { lastName: { contains: search } },
-        { employeeId: { contains: search } },
-        { user: { email: { contains: search } } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { employeeId: { contains: search, mode: 'insensitive' } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
@@ -34,11 +50,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (specialization) {
-      where.specialization = { contains: specialization };
+      where.specialization = { contains: specialization, mode: 'insensitive' };
     }
 
     const [teachers, total] = await Promise.all([
-      db.teacher.findMany({
+      tenantDb.teacher.findMany({
         where,
         include: {
           user: {
@@ -67,7 +83,7 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.teacher.count({ where }),
+      tenantDb.teacher.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -95,6 +111,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       firstName,
       lastName,
@@ -109,6 +126,21 @@ export async function POST(request: NextRequest) {
       performanceRating,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     // Validate required fields
     if (!schoolId || !firstName || !lastName || !email || !employeeId) {
       return NextResponse.json(
@@ -118,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if employee ID already exists
-    const existingEmployee = await db.teacher.findUnique({
+    const existingEmployee = await tenantDb.teacher.findUnique({
       where: { employeeId },
     });
 
@@ -130,7 +162,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if email already exists
-    const existingUser = await db.user.findUnique({
+    const existingUser = await tenantDb.user.findUnique({
       where: { email },
     });
 
@@ -142,7 +174,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create user first
-    const user = await db.user.create({
+    const user = await tenantDb.user.create({
       data: {
         schoolId,
         email,
@@ -155,7 +187,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create teacher
-    const teacher = await db.teacher.create({
+    const teacher = await tenantDb.teacher.create({
       data: {
         schoolId,
         userId: user.id,

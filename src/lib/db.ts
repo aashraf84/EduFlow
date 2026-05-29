@@ -1,13 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+// Re-export from tenant manager for backward compatibility
+// Use masterDb for platform/owner operations
+// Use getTenantDb* functions for tenant-specific operations
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
-
-export const db =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: ['query'],
-  })
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+export { masterDb as db, masterDb, getTenantDb, getTenantDbByCode, getTenantDbById, provisionTenant, decommissionTenant, disconnectAllTenants } from './tenant-manager'

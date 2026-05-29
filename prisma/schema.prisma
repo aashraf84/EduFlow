@@ -3,109 +3,41 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // ============================================
-// MULTI-TENANT SCHOOL SYSTEM
+// PLATFORM / OWNER SYSTEM (Master Database)
 // ============================================
 
-model School {
+model Tenant {
   id              String   @id @default(cuid())
   name            String
   code            String   @unique
-  address         String?
-  city            String?
-  state           String?
-  country         String?
-  phone           String?
-  email           String?
-  website         String?
-  logo            String?
-  plan            String   @default("starter")
+  databaseUrl     String
+  databaseName    String
   status          String   @default("active")
+  plan            String   @default("starter")
   maxStudents     Int      @default(500)
-  institutionType String   @default("school")
-  clientId        String?
-  activationStatus String  @default("inactive")
+  maxDevices      Int      @default(3)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  client          Client?      @relation(fields: [clientId], references: [id])
-  serialKey       SerialKey?
+  client          Client?
+  serialKeys      SerialKey[]
   devices         Device[]
-  users           User[]
-  students        Student[]
-  teachers        Teacher[]
-  classes         Class[]
-  subjects        Subject[]
-  exams           Exam[]
-  feeStructures   FeeStructure[]
-  announcements   Announcement[]
-  sessions        AcademicSession[]
-  notifications   Notification[]
-  parents         Parent[]
-  libraryBooks    LibraryBook[]
-  transportRoutes TransportRoute[]
-  hostels         Hostel[]
-  alumni          Alumni[]
-  staffMembers    StaffMember[]
-  assets          Asset[]
-  courses         Course[]
-  admissions      Admission[]
-  placements      Placement[]
-  scholarships    Scholarship[]
-  healthRecords   HealthRecord[]
-  labs            Lab[]
 
-  @@index([clientId])
-  @@index([activationStatus])
+  @@index([code])
+  @@index([status])
 }
 
-model AcademicSession {
+model OwnerUser {
   id        String   @id @default(cuid())
-  schoolId  String
-  name      String
-  startDate DateTime
-  endDate   DateTime
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  school School @relation(fields: [schoolId], references: [id])
-  terms  Term[]
-
-  @@index([schoolId])
-}
-
-model Term {
-  id        String   @id @default(cuid())
-  sessionId String
-  name      String
-  startDate DateTime
-  endDate   DateTime
-  status    String   @default("upcoming")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  session AcademicSession @relation(fields: [sessionId], references: [id])
-  exams   Exam[]
-
-  @@index([sessionId])
-}
-
-// ============================================
-// USER & AUTHENTICATION
-// ============================================
-
-model User {
-  id        String   @id @default(cuid())
-  schoolId  String
   email     String   @unique
   password  String
   name      String
-  role      String   @default("teacher")
+  role      String   @default("owner")
   avatar    String?
   phone     String?
   status    String   @default("active")
@@ -113,867 +45,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  school  School   @relation(fields: [schoolId], references: [id])
-  student Student?
-  teacher Teacher?
-  parent  Parent?
-
-  @@index([schoolId])
-  @@index([role])
+  @@index([email])
 }
-
-// ============================================
-// STUDENT INTELLIGENCE SYSTEM
-// ============================================
-
-model Student {
-  id               String   @id @default(cuid())
-  schoolId         String
-  userId           String   @unique
-  admissionNo      String   @unique
-  firstName        String
-  lastName         String
-  dateOfBirth      DateTime?
-  gender           String?
-  address          String?
-  bloodGroup       String?
-  emergencyContact String?
-  classId          String?
-  sectionId        String?
-  parentId         String?
-  admissionDate    DateTime @default(now())
-  status           String   @default("active")
-  riskLevel        String   @default("low")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  school       School         @relation(fields: [schoolId], references: [id])
-  user         User           @relation(fields: [userId], references: [id])
-  class        Class?         @relation(fields: [classId], references: [id])
-  section      Section?       @relation(fields: [sectionId], references: [id])
-  parent       Parent?        @relation(fields: [parentId], references: [id])
-  attendance   Attendance[]
-  examResults  ExamResult[]
-  feePayments  FeePayment[]
-  behaviorLogs BehaviorLog[]
-  bookIssues   BookIssue[]
-  transportAssignments TransportAssignment[]
-  hostelAllocations HostelAllocation[]
-  courseEnrollments CourseEnrollment[]
-  placements   Placement[]
-  healthRecords HealthRecord[]
-
-  @@index([schoolId])
-  @@index([classId])
-  @@index([status])
-}
-
-model Parent {
-  id         String   @id @default(cuid())
-  schoolId   String
-  userId     String   @unique
-  name       String
-  phone      String?
-  email      String?
-  occupation String?
-  address    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  school   School    @relation(fields: [schoolId], references: [id])
-  user     User      @relation(fields: [userId], references: [id])
-  students Student[]
-
-  @@index([schoolId])
-}
-
-// ============================================
-// TEACHER MANAGEMENT SYSTEM
-// ============================================
-
-model Teacher {
-  id              String   @id @default(cuid())
-  schoolId        String
-  userId          String   @unique
-  employeeId      String   @unique
-  firstName       String
-  lastName        String
-  qualification   String?
-  specialization  String?
-  dateOfJoining   DateTime @default(now())
-  salary          Float?
-  phone           String?
-  address         String?
-  status          String   @default("active")
-  performanceRating Float?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  school         School             @relation(fields: [schoolId], references: [id])
-  user           User               @relation(fields: [userId], references: [id])
-  subjects       TeacherSubject[]
-  classTeacherOf Class?
-  attendance     TeacherAttendance[]
-  timetableSlots TimetableSlot[]
-
-  @@index([schoolId])
-  @@index([status])
-}
-
-// ============================================
-// ACADEMIC STRUCTURE
-// ============================================
-
-model Class {
-  id             String   @id @default(cuid())
-  schoolId       String
-  name           String
-  level          String?
-  classTeacherId String?  @unique
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  school         School            @relation(fields: [schoolId], references: [id])
-  classTeacher   Teacher?          @relation(fields: [classTeacherId], references: [id])
-  sections       Section[]
-  students       Student[]
-  timetableSlots TimetableSlot[]
-  teacherSubjects TeacherSubject[]
-
-  @@index([schoolId])
-}
-
-model Section {
-  id        String   @id @default(cuid())
-  classId   String
-  name      String
-  capacity  Int      @default(40)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  class    Class     @relation(fields: [classId], references: [id])
-  students Student[]
-
-  @@index([classId])
-}
-
-model Subject {
-  id        String   @id @default(cuid())
-  schoolId  String
-  name      String
-  code      String?
-  type      String   @default("core")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  school   School           @relation(fields: [schoolId], references: [id])
-  teachers TeacherSubject[]
-  exams    Exam[]
-
-  @@index([schoolId])
-}
-
-model TeacherSubject {
-  id        String   @id @default(cuid())
-  teacherId String
-  subjectId String
-  classId   String?
-  createdAt DateTime @default(now())
-
-  teacher Teacher @relation(fields: [teacherId], references: [id])
-  subject Subject @relation(fields: [subjectId], references: [id])
-  class   Class?  @relation(fields: [classId], references: [id])
-
-  @@index([teacherId])
-  @@index([subjectId])
-}
-
-// ============================================
-// ATTENDANCE & DISCIPLINE SYSTEM
-// ============================================
-
-model Attendance {
-  id        String   @id @default(cuid())
-  schoolId  String
-  studentId String
-  date      DateTime
-  status    String
-  remarks   String?
-  markedBy  String?
-  createdAt DateTime @default(now())
-
-  student Student @relation(fields: [studentId], references: [id])
-
-  @@unique([studentId, date])
-  @@index([schoolId])
-  @@index([date])
-  @@index([status])
-}
-
-model TeacherAttendance {
-  id        String   @id @default(cuid())
-  schoolId  String
-  teacherId String
-  date      DateTime
-  status    String
-  checkIn   DateTime?
-  checkOut  DateTime?
-  remarks   String?
-  createdAt DateTime @default(now())
-
-  teacher Teacher @relation(fields: [teacherId], references: [id])
-
-  @@unique([teacherId, date])
-  @@index([schoolId])
-  @@index([date])
-}
-
-model BehaviorLog {
-  id          String   @id @default(cuid())
-  schoolId    String
-  studentId   String
-  type        String
-  category    String?
-  description String
-  action      String?
-  reportedBy  String?
-  date        DateTime @default(now())
-  createdAt   DateTime @default(now())
-
-  student Student @relation(fields: [studentId], references: [id])
-
-  @@index([schoolId])
-  @@index([studentId])
-}
-
-// ============================================
-// EXAMS & GRADING ENGINE
-// ============================================
-
-model Exam {
-  id           String   @id @default(cuid())
-  schoolId     String
-  subjectId    String
-  termId       String
-  name         String
-  type         String   @default("written")
-  totalMarks   Float
-  passingMarks Float
-  date         DateTime
-  duration     Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  school  School       @relation(fields: [schoolId], references: [id])
-  subject Subject      @relation(fields: [subjectId], references: [id])
-  term    Term         @relation(fields: [termId], references: [id])
-  results ExamResult[]
-
-  @@index([schoolId])
-  @@index([termId])
-}
-
-model ExamResult {
-  id            String   @id @default(cuid())
-  examId        String
-  studentId     String
-  marksObtained Float
-  grade         String?
-  remarks       String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  exam    Exam    @relation(fields: [examId], references: [id])
-  student Student @relation(fields: [studentId], references: [id])
-
-  @@unique([examId, studentId])
-  @@index([studentId])
-}
-
-// ============================================
-// FEES & FINANCE ENGINE
-// ============================================
-
-model FeeStructure {
-  id                String   @id @default(cuid())
-  schoolId          String
-  name              String
-  amount            Float
-  frequency         String   @default("monthly")
-  classId           String?
-  academicSessionId String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  school School @relation(fields: [schoolId], references: [id])
-
-  @@index([schoolId])
-}
-
-model FeePayment {
-  id            String    @id @default(cuid())
-  schoolId      String
-  studentId     String
-  amount        Float
-  paidAmount    Float     @default(0)
-  feeType       String
-  status        String    @default("pending")
-  dueDate       DateTime
-  paidDate      DateTime?
-  paymentMode   String?
-  transactionId String?
-  discount      Float     @default(0)
-  remarks       String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  student Student @relation(fields: [studentId], references: [id])
-
-  @@index([schoolId])
-  @@index([studentId])
-  @@index([status])
-}
-
-// ============================================
-// COMMUNICATION ENGINE
-// ============================================
-
-model Announcement {
-  id        String   @id @default(cuid())
-  schoolId  String
-  title     String
-  content   String
-  type      String   @default("general")
-  target    String   @default("all")
-  priority  String   @default("normal")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  school School @relation(fields: [schoolId], references: [id])
-
-  @@index([schoolId])
-}
-
-model Notification {
-  id        String   @id @default(cuid())
-  schoolId  String
-  userId    String
-  title     String
-  message   String
-  type      String   @default("info")
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  school    School   @relation(fields: [schoolId], references: [id])
-
-  @@index([userId])
-  @@index([schoolId])
-}
-
-// ============================================
-// TIMETABLE SYSTEM
-// ============================================
-
-model TimetableSlot {
-  id        String   @id @default(cuid())
-  schoolId  String
-  classId   String
-  teacherId String
-  subjectId String
-  day       String
-  startTime String
-  endTime   String
-  room      String?
-  createdAt DateTime @default(now())
-
-  class   Class   @relation(fields: [classId], references: [id])
-  teacher Teacher @relation(fields: [teacherId], references: [id])
-
-  @@index([classId])
-  @@index([teacherId])
-}
-
-// ============================================
-// LIBRARY MANAGEMENT SYSTEM
-// ============================================
-
-model LibraryBook {
-  id           String   @id @default(cuid())
-  schoolId     String
-  title        String
-  author       String
-  isbn         String?
-  publisher    String?
-  category     String?
-  totalCopies  Int      @default(1)
-  availableCopies Int   @default(1)
-  shelfLocation String?
-  edition      String?
-  price        Float?
-  status       String   @default("available")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  school    School        @relation(fields: [schoolId], references: [id])
-  issues    BookIssue[]
-
-  @@index([schoolId])
-  @@index([category])
-}
-
-model BookIssue {
-  id         String    @id @default(cuid())
-  schoolId   String
-  bookId     String
-  studentId  String
-  issueDate  DateTime  @default(now())
-  dueDate    DateTime
-  returnDate DateTime?
-  fine       Float     @default(0)
-  status     String    @default("issued")
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  book    LibraryBook @relation(fields: [bookId], references: [id])
-  student Student     @relation(fields: [studentId], references: [id])
-
-  @@index([schoolId])
-  @@index([studentId])
-  @@index([status])
-}
-
-// ============================================
-// TRANSPORT MANAGEMENT SYSTEM
-// ============================================
-
-model TransportRoute {
-  id          String   @id @default(cuid())
-  schoolId    String
-  routeName   String
-  routeNumber String
-  driverName  String
-  driverPhone String
-  vehicleNo   String
-  capacity    Int      @default(40)
-  stops       String?
-  morningTime String?
-  eveningTime String?
-  status      String   @default("active")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  school      School           @relation(fields: [schoolId], references: [id])
-  assignments TransportAssignment[]
-
-  @@index([schoolId])
-}
-
-model TransportAssignment {
-  id        String   @id @default(cuid())
-  schoolId  String
-  routeId   String
-  studentId String
-  pickupPoint String?
-  dropPoint   String?
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-
-  route   TransportRoute @relation(fields: [routeId], references: [id])
-  student Student        @relation(fields: [studentId], references: [id])
-
-  @@index([routeId])
-  @@index([studentId])
-}
-
-// ============================================
-// HOSTEL & RESIDENCE SYSTEM
-// ============================================
-
-model Hostel {
-  id           String   @id @default(cuid())
-  schoolId     String
-  name         String
-  type         String   @default("boys")
-  capacity     Int      @default(100)
-  wardenName   String?
-  wardenPhone  String?
-  floors       Int      @default(3)
-  status       String   @default("active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  school  School        @relation(fields: [schoolId], references: [id])
-  rooms   HostelRoom[]
-
-  @@index([schoolId])
-}
-
-model HostelRoom {
-  id         String   @id @default(cuid())
-  hostelId   String
-  roomNumber String
-  floor      Int
-  capacity   Int      @default(2)
-  occupants  Int      @default(0)
-  roomType   String   @default("shared")
-  status     String   @default("available")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  hostel      Hostel          @relation(fields: [hostelId], references: [id])
-  allocations HostelAllocation[]
-
-  @@index([hostelId])
-}
-
-model HostelAllocation {
-  id         String   @id @default(cuid())
-  schoolId   String
-  studentId  String
-  roomId     String
-  checkIn    DateTime @default(now())
-  checkOut   DateTime?
-  status     String   @default("active")
-  createdAt  DateTime @default(now())
-
-  room    HostelRoom @relation(fields: [roomId], references: [id])
-  student Student    @relation(fields: [studentId], references: [id])
-
-  @@index([schoolId])
-  @@index([studentId])
-}
-
-// ============================================
-// ALUMNI NETWORK SYSTEM
-// ============================================
-
-model Alumni {
-  id              String   @id @default(cuid())
-  schoolId        String
-  name            String
-  email           String
-  phone           String?
-  graduationYear  Int
-  degree          String?
-  department      String?
-  currentCompany  String?
-  currentRole     String?
-  linkedIn        String?
-  address         String?
-  status          String   @default("active")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  school School @relation(fields: [schoolId], references: [id])
-
-  @@index([schoolId])
-  @@index([graduationYear])
-}
-
-// ============================================
-// HR & PAYROLL SYSTEM
-// ============================================
-
-model StaffMember {
-  id            String   @id @default(cuid())
-  schoolId      String
-  employeeId    String   @unique
-  name          String
-  email         String?
-  phone         String?
-  department    String?
-  designation   String?
-  dateOfJoining DateTime @default(now())
-  salary        Float?
-  bankAccount   String?
-  panNumber     String?
-  status        String   @default("active")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  school  School       @relation(fields: [schoolId], references: [id])
-  payroll PayrollRecord[]
-  leaves  LeaveRecord[]
-
-  @@index([schoolId])
-  @@index([department])
-}
-
-model PayrollRecord {
-  id         String   @id @default(cuid())
-  schoolId   String
-  staffId    String
-  month      String
-  basicPay   Float
-  allowances Float    @default(0)
-  deductions Float    @default(0)
-  netPay     Float
-  status     String   @default("pending")
-  paidDate   DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  staff StaffMember @relation(fields: [staffId], references: [id])
-
-  @@index([schoolId])
-  @@index([staffId])
-  @@index([status])
-}
-
-model LeaveRecord {
-  id         String   @id @default(cuid())
-  schoolId   String
-  staffId    String
-  leaveType  String
-  startDate  DateTime
-  endDate    DateTime
-  days       Int
-  reason     String?
-  status     String   @default("pending")
-  approvedBy String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  staff StaffMember @relation(fields: [staffId], references: [id])
-
-  @@index([schoolId])
-  @@index([staffId])
-  @@index([status])
-}
-
-// ============================================
-// INVENTORY & ASSET MANAGEMENT
-// ============================================
-
-model Asset {
-  id           String   @id @default(cuid())
-  schoolId     String
-  name         String
-  assetCode    String   @unique
-  category     String
-  purchaseDate DateTime @default(now())
-  purchaseCost Float
-  condition    String   @default("good")
-  location     String?
-  assignedTo   String?
-  vendor       String?
-  warrantyEnd  DateTime?
-  depreciation Float    @default(0)
-  status       String   @default("active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  school School @relation(fields: [schoolId], references: [id])
-
-  @@index([schoolId])
-  @@index([category])
-  @@index([status])
-}
-
-// ============================================
-// LMS / ONLINE LEARNING SYSTEM
-// ============================================
-
-model Course {
-  id          String   @id @default(cuid())
-  schoolId    String
-  title       String
-  code        String?
-  description String?
-  instructor  String?
-  classId     String?
-  subjectId   String?
-  thumbnail   String?
-  duration    Int?
-  status      String   @default("draft")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  school    School          @relation(fields: [schoolId], references: [id])
-  materials CourseMaterial[]
-  enrollments CourseEnrollment[]
-
-  @@index([schoolId])
-  @@index([status])
-}
-
-model CourseMaterial {
-  id         String   @id @default(cuid())
-  courseId   String
-  title      String
-  type       String   @default("video")
-  url        String?
-  content    String?
-  order      Int      @default(0)
-  duration   Int?
-  createdAt  DateTime @default(now())
-
-  course Course @relation(fields: [courseId], references: [id])
-
-  @@index([courseId])
-}
-
-model CourseEnrollment {
-  id         String   @id @default(cuid())
-  courseId   String
-  studentId  String
-  progress   Float    @default(0)
-  enrolledAt DateTime @default(now())
-  completedAt DateTime?
-  status     String   @default("active")
-
-  course  Course  @relation(fields: [courseId], references: [id])
-  student Student @relation(fields: [studentId], references: [id])
-
-  @@unique([courseId, studentId])
-  @@index([studentId])
-}
-
-// ============================================
-// ADMISSION PORTAL SYSTEM
-// ============================================
-
-model Admission {
-  id              String   @id @default(cuid())
-  schoolId        String
-  applicantName   String
-  email           String
-  phone           String?
-  appliedClass    String?
-  previousSchool  String?
-  gpa             Float?
-  documents       String?
-  status          String   @default("applied")
-  applicationDate DateTime @default(now())
-  reviewedBy      String?
-  reviewDate      DateTime?
-  remarks         String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  school School @relation(fields: [schoolId], references: [id])
-
-  @@index([schoolId])
-  @@index([status])
-}
-
-// ============================================
-// PLACEMENT & CAREER CELL
-// ============================================
-
-model Placement {
-  id            String   @id @default(cuid())
-  schoolId      String
-  studentId     String
-  companyName   String
-  position      String
-  package       Float?
-  placementDate DateTime @default(now())
-  type          String   @default("job")
-  status        String   @default("offered")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  school  School  @relation(fields: [schoolId], references: [id])
-  student Student @relation(fields: [studentId], references: [id])
-
-  @@index([schoolId])
-  @@index([studentId])
-}
-
-// ============================================
-// SCHOLARSHIP MANAGEMENT
-// ============================================
-
-model Scholarship {
-  id             String   @id @default(cuid())
-  schoolId       String
-  name           String
-  description    String?
-  amount         Float
-  eligibility    String?
-  deadline       DateTime?
-  type           String   @default("merit")
-  status         String   @default("active")
-  applicationCount Int   @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  school School @relation(fields: [schoolId], references: [id])
-
-  @@index([schoolId])
-  @@index([type])
-}
-
-// ============================================
-// HEALTH & MEDICAL RECORDS
-// ============================================
-
-model HealthRecord {
-  id            String   @id @default(cuid())
-  schoolId      String
-  studentId     String
-  school        School   @relation(fields: [schoolId], references: [id])
-  height        Float?
-  weight        Float?
-  bloodGroup    String?
-  vision        String?
-  allergies     String?
-  conditions    String?
-  medications   String?
-  lastCheckup   DateTime?
-  doctorName    String?
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  student Student @relation(fields: [studentId], references: [id])
-
-  @@index([schoolId])
-  @@index([studentId])
-}
-
-// ============================================
-// LAB MANAGEMENT SYSTEM
-// ============================================
-
-model Lab {
-  id          String   @id @default(cuid())
-  schoolId    String
-  name        String
-  department  String?
-  capacity    Int      @default(30)
-  equipment   String?
-  incharge    String?
-  status      String   @default("active")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  school    School      @relation(fields: [schoolId], references: [id])
-  schedules LabSchedule[]
-
-  @@index([schoolId])
-}
-
-model LabSchedule {
-  id        String   @id @default(cuid())
-  labId     String
-  classId   String
-  subjectId String
-  day       String
-  startTime String
-  endTime   String
-  createdAt DateTime @default(now())
-
-  lab  Lab  @relation(fields: [labId], references: [id])
-
-  @@index([labId])
-  @@index([classId])
-}
-
-// ============================================
-// OWNER / ERP VENDOR SYSTEM
-// ============================================
 
 model Client {
   id              String   @id @default(cuid())
@@ -990,10 +63,11 @@ model Client {
   logo            String?
   status          String   @default("active")
   notes           String?
+  tenantId        String?  @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  schools         School[]
+  tenant          Tenant?     @relation(fields: [tenantId], references: [id])
   serialKeys      SerialKey[]
   devices         Device[]
   invoices        Invoice[]
@@ -1007,7 +81,7 @@ model SerialKey {
   id            String   @id @default(cuid())
   key           String   @unique
   clientId      String
-  schoolId      String?  @unique
+  tenantId      String?
   plan          String   @default("starter")
   maxDevices    Int      @default(3)
   maxStudents   Int      @default(500)
@@ -1019,7 +93,7 @@ model SerialKey {
   updatedAt     DateTime @updatedAt
 
   client        Client     @relation(fields: [clientId], references: [id])
-  school        School?    @relation(fields: [schoolId], references: [id])
+  tenant        Tenant?    @relation(fields: [tenantId], references: [id])
   devices       Device[]
 
   @@index([clientId])
@@ -1031,7 +105,7 @@ model Device {
   id              String   @id @default(cuid())
   clientId        String
   serialKeyId     String
-  schoolId        String?
+  tenantId        String?
   fingerprint     String
   deviceName      String?
   browser         String?
@@ -1045,7 +119,7 @@ model Device {
 
   client          Client     @relation(fields: [clientId], references: [id])
   serialKey       SerialKey  @relation(fields: [serialKeyId], references: [id])
-  school          School?    @relation(fields: [schoolId], references: [id])
+  tenant          Tenant?    @relation(fields: [tenantId], references: [id])
 
   @@unique([serialKeyId, fingerprint])
   @@index([clientId])
@@ -1088,7 +162,7 @@ model InvoiceItem {
   total       Float
   createdAt   DateTime @default(now())
 
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
 }
@@ -1128,7 +202,968 @@ model QuotationItem {
   total         Float
   createdAt     DateTime @default(now())
 
-  quotation     Quotation @relation(fields: [quotationId], references: [id])
+  quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
   @@index([quotationId])
+}
+
+// ============================================
+// TENANT-SPECIFIC MODELS (Per-Client Database)
+// Each client/school gets their own database
+// with these models
+// ============================================
+
+model School {
+  id              String   @id @default(cuid())
+  name            String
+  code            String   @unique
+  address         String?
+  city            String?
+  state           String?
+  country         String?
+  phone           String?
+  email           String?
+  website         String?
+  logo            String?
+  plan            String   @default("starter")
+  status          String   @default("active")
+  maxStudents     Int      @default(500)
+  institutionType String   @default("school")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+  students        Student[]
+  teachers        Teacher[]
+  classes         Class[]
+  subjects        Subject[]
+  exams           Exam[]
+  feeStructures   FeeStructure[]
+  announcements   Announcement[]
+  sessions        AcademicSession[]
+  notifications   Notification[]
+  parents         Parent[]
+  libraryBooks    LibraryBook[]
+  transportRoutes TransportRoute[]
+  hostels         Hostel[]
+  alumni          Alumni[]
+  staffMembers    StaffMember[]
+  assets          Asset[]
+  courses         Course[]
+  admissions      Admission[]
+  placements      Placement[]
+  scholarships    Scholarship[]
+  healthRecords   HealthRecord[]
+  labs            Lab[]
+
+  @@index([institutionType])
+}
+
+model AcademicSession {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  terms  Term[]
+
+  @@index([schoolId])
+}
+
+model Term {
+  id        String   @id @default(cuid())
+  sessionId String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  status    String   @default("upcoming")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exams   Exam[]
+
+  @@index([sessionId])
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id        String   @id @default(cuid())
+  schoolId  String
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("teacher")
+  avatar    String?
+  phone     String?
+  status    String   @default("active")
+  lastLogin DateTime?
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student?
+  teacher Teacher?
+  parent  Parent?
+
+  @@index([schoolId])
+  @@index([role])
+}
+
+// ============================================
+// STUDENT INTELLIGENCE SYSTEM
+// ============================================
+
+model Student {
+  id               String   @id @default(cuid())
+  schoolId         String
+  userId           String   @unique
+  admissionNo      String   @unique
+  firstName        String
+  lastName         String
+  dateOfBirth      DateTime?
+  gender           String?
+  address          String?
+  bloodGroup       String?
+  emergencyContact String?
+  classId          String?
+  sectionId        String?
+  parentId         String?
+  admissionDate    DateTime @default(now())
+  status           String   @default("active")
+  riskLevel        String   @default("low")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  school       School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class        Class?         @relation(fields: [classId], references: [id])
+  section      Section?       @relation(fields: [sectionId], references: [id])
+  parent       Parent?        @relation(fields: [parentId], references: [id])
+  attendance   Attendance[]
+  examResults  ExamResult[]
+  feePayments  FeePayment[]
+  behaviorLogs BehaviorLog[]
+  bookIssues   BookIssue[]
+  transportAssignments TransportAssignment[]
+  hostelAllocations HostelAllocation[]
+  courseEnrollments CourseEnrollment[]
+  placements   Placement[]
+  healthRecords HealthRecord[]
+
+  @@index([schoolId])
+  @@index([classId])
+  @@index([status])
+}
+
+model Parent {
+  id         String   @id @default(cuid())
+  schoolId   String
+  userId     String   @unique
+  name       String
+  phone      String?
+  email      String?
+  occupation String?
+  address    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students Student[]
+
+  @@index([schoolId])
+}
+
+// ============================================
+// TEACHER MANAGEMENT SYSTEM
+// ============================================
+
+model Teacher {
+  id              String   @id @default(cuid())
+  schoolId        String
+  userId          String   @unique
+  employeeId      String   @unique
+  firstName       String
+  lastName        String
+  qualification   String?
+  specialization  String?
+  dateOfJoining   DateTime @default(now())
+  salary          Float?
+  phone           String?
+  address         String?
+  status          String   @default("active")
+  performanceRating Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school         School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjects       TeacherSubject[]
+  classTeacherOf Class?
+  attendance     TeacherAttendance[]
+  timetableSlots TimetableSlot[]
+
+  @@index([schoolId])
+  @@index([status])
+}
+
+// ============================================
+// ACADEMIC STRUCTURE
+// ============================================
+
+model Class {
+  id             String   @id @default(cuid())
+  schoolId       String
+  name           String
+  level          String?
+  classTeacherId String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classTeacher   Teacher?          @relation(fields: [classTeacherId], references: [id])
+  sections       Section[]
+  students       Student[]
+  timetableSlots TimetableSlot[]
+  teacherSubjects TeacherSubject[]
+
+  @@index([schoolId])
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  classId   String
+  name      String
+  capacity  Int      @default(40)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  class    Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  students Student[]
+
+  @@index([classId])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  code      String?
+  type      String   @default("core")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school   School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teachers TeacherSubject[]
+  exams    Exam[]
+
+  @@index([schoolId])
+}
+
+model TeacherSubject {
+  id        String   @id @default(cuid())
+  teacherId String
+  subjectId String
+  classId   String?
+  createdAt DateTime @default(now())
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  class   Class?  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId])
+  @@index([subjectId])
+}
+
+// ============================================
+// ATTENDANCE & DISCIPLINE SYSTEM
+// ============================================
+
+model Attendance {
+  id        String   @id @default(cuid())
+  schoolId  String
+  studentId String
+  date      DateTime
+  status    String
+  remarks   String?
+  markedBy  String?
+  createdAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date])
+  @@index([schoolId])
+  @@index([date])
+  @@index([status])
+}
+
+model TeacherAttendance {
+  id        String   @id @default(cuid())
+  schoolId  String
+  teacherId String
+  date      DateTime
+  status    String
+  checkIn   DateTime?
+  checkOut  DateTime?
+  remarks   String?
+  createdAt DateTime @default(now())
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, date])
+  @@index([schoolId])
+  @@index([date])
+}
+
+model BehaviorLog {
+  id          String   @id @default(cuid())
+  schoolId    String
+  studentId   String
+  type        String
+  category    String?
+  description String
+  action      String?
+  reportedBy  String?
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+// ============================================
+// EXAMS & GRADING ENGINE
+// ============================================
+
+model Exam {
+  id           String   @id @default(cuid())
+  schoolId     String
+  subjectId    String
+  termId       String
+  name         String
+  type         String   @default("written")
+  totalMarks   Float
+  passingMarks Float
+  date         DateTime
+  duration     Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school  School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  term    Term         @relation(fields: [termId], references: [id], onDelete: Cascade)
+  results ExamResult[]
+
+  @@index([schoolId])
+  @@index([termId])
+}
+
+model ExamResult {
+  id            String   @id @default(cuid())
+  examId        String
+  studentId     String
+  marksObtained Float
+  grade         String?
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  exam    Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@index([studentId])
+}
+
+// ============================================
+// FEES & FINANCE ENGINE
+// ============================================
+
+model FeeStructure {
+  id                String   @id @default(cuid())
+  schoolId          String
+  name              String
+  amount            Float
+  frequency         String   @default("monthly")
+  classId           String?
+  academicSessionId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model FeePayment {
+  id            String    @id @default(cuid())
+  schoolId      String
+  studentId     String
+  amount        Float
+  paidAmount    Float     @default(0)
+  feeType       String
+  status        String    @default("pending")
+  dueDate       DateTime
+  paidDate      DateTime?
+  paymentMode   String?
+  transactionId String?
+  discount      Float     @default(0)
+  remarks       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([studentId])
+  @@index([status])
+}
+
+// ============================================
+// COMMUNICATION ENGINE
+// ============================================
+
+model Announcement {
+  id        String   @id @default(cuid())
+  schoolId  String
+  title     String
+  content   String
+  type      String   @default("general")
+  target    String   @default("all")
+  priority  String   @default("normal")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  schoolId  String
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([schoolId])
+}
+
+// ============================================
+// TIMETABLE SYSTEM
+// ============================================
+
+model TimetableSlot {
+  id        String   @id @default(cuid())
+  schoolId  String
+  classId   String
+  teacherId String
+  subjectId String
+  day       String
+  startTime String
+  endTime   String
+  room      String?
+  createdAt DateTime @default(now())
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([classId])
+  @@index([teacherId])
+}
+
+// ============================================
+// LIBRARY MANAGEMENT SYSTEM
+// ============================================
+
+model LibraryBook {
+  id           String   @id @default(cuid())
+  schoolId     String
+  title        String
+  author       String
+  isbn         String?
+  publisher    String?
+  category     String?
+  totalCopies  Int      @default(1)
+  availableCopies Int   @default(1)
+  shelfLocation String?
+  edition      String?
+  price        Float?
+  status       String   @default("available")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school    School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  issues    BookIssue[]
+
+  @@index([schoolId])
+  @@index([category])
+}
+
+model BookIssue {
+  id         String    @id @default(cuid())
+  schoolId   String
+  bookId     String
+  studentId  String
+  issueDate  DateTime  @default(now())
+  dueDate    DateTime
+  returnDate DateTime?
+  fine       Float     @default(0)
+  status     String    @default("issued")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  book    LibraryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  student Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([studentId])
+  @@index([status])
+}
+
+// ============================================
+// TRANSPORT MANAGEMENT SYSTEM
+// ============================================
+
+model TransportRoute {
+  id          String   @id @default(cuid())
+  schoolId    String
+  routeName   String
+  routeNumber String
+  driverName  String
+  driverPhone String
+  vehicleNo   String
+  capacity    Int      @default(40)
+  stops       String?
+  morningTime String?
+  eveningTime String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assignments TransportAssignment[]
+
+  @@index([schoolId])
+}
+
+model TransportAssignment {
+  id        String   @id @default(cuid())
+  schoolId  String
+  routeId   String
+  studentId String
+  pickupPoint String?
+  dropPoint   String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  route   TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([routeId])
+  @@index([studentId])
+}
+
+// ============================================
+// HOSTEL & RESIDENCE SYSTEM
+// ============================================
+
+model Hostel {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  type         String   @default("boys")
+  capacity     Int      @default(100)
+  wardenName   String?
+  wardenPhone  String?
+  floors       Int      @default(3)
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school  School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  rooms   HostelRoom[]
+
+  @@index([schoolId])
+}
+
+model HostelRoom {
+  id         String   @id @default(cuid())
+  hostelId   String
+  roomNumber String
+  floor      Int
+  capacity   Int      @default(2)
+  occupants  Int      @default(0)
+  roomType   String   @default("shared")
+  status     String   @default("available")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  hostel      Hostel          @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  allocations HostelAllocation[]
+
+  @@index([hostelId])
+}
+
+model HostelAllocation {
+  id         String   @id @default(cuid())
+  schoolId   String
+  studentId  String
+  roomId     String
+  checkIn    DateTime @default(now())
+  checkOut   DateTime?
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+
+  room    HostelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  student Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+// ============================================
+// ALUMNI NETWORK SYSTEM
+// ============================================
+
+model Alumni {
+  id              String   @id @default(cuid())
+  schoolId        String
+  name            String
+  email           String
+  phone           String?
+  graduationYear  Int
+  degree          String?
+  department      String?
+  currentCompany  String?
+  currentRole     String?
+  linkedIn        String?
+  address         String?
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([graduationYear])
+}
+
+// ============================================
+// HR & PAYROLL SYSTEM
+// ============================================
+
+model StaffMember {
+  id            String   @id @default(cuid())
+  schoolId      String
+  employeeId    String   @unique
+  name          String
+  email         String?
+  phone         String?
+  department    String?
+  designation   String?
+  dateOfJoining DateTime @default(now())
+  salary        Float?
+  bankAccount   String?
+  panNumber     String?
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school  School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payroll PayrollRecord[]
+  leaves  LeaveRecord[]
+
+  @@index([schoolId])
+  @@index([department])
+}
+
+model PayrollRecord {
+  id         String   @id @default(cuid())
+  schoolId   String
+  staffId    String
+  month      String
+  basicPay   Float
+  allowances Float    @default(0)
+  deductions Float    @default(0)
+  netPay     Float
+  status     String   @default("pending")
+  paidDate   DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([staffId])
+  @@index([status])
+}
+
+model LeaveRecord {
+  id         String   @id @default(cuid())
+  schoolId   String
+  staffId    String
+  leaveType  String
+  startDate  DateTime
+  endDate    DateTime
+  days       Int
+  reason     String?
+  status     String   @default("pending")
+  approvedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([staffId])
+  @@index([status])
+}
+
+// ============================================
+// INVENTORY & ASSET MANAGEMENT
+// ============================================
+
+model Asset {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  assetCode    String   @unique
+  category     String
+  purchaseDate DateTime @default(now())
+  purchaseCost Float
+  condition    String   @default("good")
+  location     String?
+  assignedTo   String?
+  vendor       String?
+  warrantyEnd  DateTime?
+  depreciation Float    @default(0)
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([category])
+  @@index([status])
+}
+
+// ============================================
+// LMS / ONLINE LEARNING SYSTEM
+// ============================================
+
+model Course {
+  id          String   @id @default(cuid())
+  schoolId    String
+  title       String
+  code        String?
+  description String?
+  instructor  String?
+  classId     String?
+  subjectId   String?
+  thumbnail   String?
+  duration    Int?
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school    School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  materials CourseMaterial[]
+  enrollments CourseEnrollment[]
+
+  @@index([schoolId])
+  @@index([status])
+}
+
+model CourseMaterial {
+  id         String   @id @default(cuid())
+  courseId   String
+  title      String
+  type       String   @default("video")
+  url        String?
+  content    String?
+  order      Int      @default(0)
+  duration   Int?
+  createdAt  DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+}
+
+model CourseEnrollment {
+  id         String   @id @default(cuid())
+  courseId   String
+  studentId  String
+  progress   Float    @default(0)
+  enrolledAt DateTime @default(now())
+  completedAt DateTime?
+  status     String   @default("active")
+
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, studentId])
+  @@index([studentId])
+}
+
+// ============================================
+// ADMISSION PORTAL SYSTEM
+// ============================================
+
+model Admission {
+  id              String   @id @default(cuid())
+  schoolId        String
+  applicantName   String
+  email           String
+  phone           String?
+  appliedClass    String?
+  previousSchool  String?
+  gpa             Float?
+  documents       String?
+  status          String   @default("applied")
+  applicationDate DateTime @default(now())
+  reviewedBy      String?
+  reviewDate      DateTime?
+  remarks         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([status])
+}
+
+// ============================================
+// PLACEMENT & CAREER CELL
+// ============================================
+
+model Placement {
+  id            String   @id @default(cuid())
+  schoolId      String
+  studentId     String
+  companyName   String
+  position      String
+  package       Float?
+  placementDate DateTime @default(now())
+  type          String   @default("job")
+  status        String   @default("offered")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+// ============================================
+// SCHOLARSHIP MANAGEMENT
+// ============================================
+
+model Scholarship {
+  id             String   @id @default(cuid())
+  schoolId       String
+  name           String
+  description    String?
+  amount         Float
+  eligibility    String?
+  deadline       DateTime?
+  type           String   @default("merit")
+  status         String   @default("active")
+  applicationCount Int   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([type])
+}
+
+// ============================================
+// HEALTH & MEDICAL RECORDS
+// ============================================
+
+model HealthRecord {
+  id            String   @id @default(cuid())
+  schoolId      String
+  studentId     String
+  height        Float?
+  weight        Float?
+  bloodGroup    String?
+  vision        String?
+  allergies     String?
+  conditions    String?
+  medications   String?
+  lastCheckup   DateTime?
+  doctorName    String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+// ============================================
+// LAB MANAGEMENT SYSTEM
+// ============================================
+
+model Lab {
+  id          String   @id @default(cuid())
+  schoolId    String
+  name        String
+  department  String?
+  capacity    Int      @default(30)
+  equipment   String?
+  incharge    String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school    School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schedules LabSchedule[]
+
+  @@index([schoolId])
+}
+
+model LabSchedule {
+  id        String   @id @default(cuid())
+  labId     String
+  classId   String
+  subjectId String
+  day       String
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+
+  lab  Lab  @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@index([labId])
+  @@index([classId])
 }

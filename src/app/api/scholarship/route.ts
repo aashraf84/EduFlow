@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     const where: Prisma.ScholarshipWhereInput = {};
 
@@ -21,9 +37,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } },
-        { eligibility: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { eligibility: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -36,30 +52,31 @@ export async function GET(request: NextRequest) {
     }
 
     const [scholarships, total] = await Promise.all([
-      db.scholarship.findMany({
+      tenantDb.scholarship.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      db.scholarship.count({ where }),
+      tenantDb.scholarship.count({ where }),
     ]);
 
     // Summary stats
+    const schoolIdFilter = schoolId || undefined;
     const [totalScholarships, totalFunds, typeBreakdown, totalApplications] = await Promise.all([
-      db.scholarship.count({ where: { schoolId: schoolId || undefined } }),
-      db.scholarship.aggregate({
-        where: { schoolId: schoolId || undefined },
+      tenantDb.scholarship.count({ where: { schoolId: schoolIdFilter } }),
+      tenantDb.scholarship.aggregate({
+        where: { schoolId: schoolIdFilter },
         _sum: { amount: true },
       }),
-      db.scholarship.groupBy({
+      tenantDb.scholarship.groupBy({
         by: ['type'],
-        where: { schoolId: schoolId || undefined },
+        where: { schoolId: schoolIdFilter },
         _count: { type: true },
         _sum: { amount: true },
       }),
-      db.scholarship.aggregate({
-        where: { schoolId: schoolId || undefined },
+      tenantDb.scholarship.aggregate({
+        where: { schoolId: schoolIdFilter },
         _sum: { applicationCount: true },
       }),
     ]);
@@ -99,6 +116,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       name,
       description,
@@ -110,6 +128,21 @@ export async function POST(request: NextRequest) {
       applicationCount,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     if (!schoolId || !name || !amount) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: schoolId, name, amount' },
@@ -117,7 +150,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const scholarship = await db.scholarship.create({
+    const scholarship = await tenantDb.scholarship.create({
       data: {
         schoolId,
         name,

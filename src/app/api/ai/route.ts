@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 
 type InsightType = 'student_risk' | 'performance' | 'admin_report' | 'teacher_assistant';
 
@@ -14,9 +14,11 @@ const INSIGHT_SYSTEM_PROMPTS: Record<InsightType, string> = {
     'You are an AI teaching assistant for educators. Based on the provided class and student data, offer personalized teaching strategies, differentiation suggestions, classroom management tips, and resource recommendations. Be practical, specific, and pedagogically sound.',
 };
 
-async function gatherStudentRiskData(schoolId: string) {
-  const [students, attendance, behaviorLogs, examResults] = await Promise.all([
-    db.student.findMany({
+async function gatherStudentRiskData(tenantDb: Awaited<ReturnType<typeof getTenantDbByCode>>, schoolId: string) {
+  if (!tenantDb) return null;
+
+  const [students, behaviorLogs, examResults] = await Promise.all([
+    tenantDb.student.findMany({
       where: { schoolId, status: 'active' },
       include: {
         class: { select: { name: true } },
@@ -31,13 +33,7 @@ async function gatherStudentRiskData(schoolId: string) {
         },
       },
     }),
-    db.attendance.groupBy({
-      by: ['studentId'],
-      where: { schoolId },
-      _count: { id: true },
-      _sum: {},
-    }),
-    db.behaviorLog.findMany({
+    tenantDb.behaviorLog.findMany({
       where: { schoolId },
       orderBy: { date: 'desc' },
       take: 50,
@@ -45,7 +41,7 @@ async function gatherStudentRiskData(schoolId: string) {
         student: { select: { firstName: true, lastName: true } },
       },
     }),
-    db.examResult.findMany({
+    tenantDb.examResult.findMany({
       where: {
         exam: { schoolId },
       },
@@ -64,10 +60,10 @@ async function gatherStudentRiskData(schoolId: string) {
 
   const studentRiskData = await Promise.all(
     students.slice(0, 30).map(async (student) => {
-      const totalDays = await db.attendance.count({
+      const totalDays = await tenantDb.attendance.count({
         where: { studentId: student.id, date: { gte: thirtyDaysAgo } },
       });
-      const presentDays = await db.attendance.count({
+      const presentDays = await tenantDb.attendance.count({
         where: {
           studentId: student.id,
           date: { gte: thirtyDaysAgo },
@@ -119,9 +115,11 @@ async function gatherStudentRiskData(schoolId: string) {
   };
 }
 
-async function gatherPerformanceData(schoolId: string) {
+async function gatherPerformanceData(tenantDb: Awaited<ReturnType<typeof getTenantDbByCode>>, schoolId: string) {
+  if (!tenantDb) return null;
+
   const [exams, resultsBySubject, resultsByClass] = await Promise.all([
-    db.exam.findMany({
+    tenantDb.exam.findMany({
       where: { schoolId },
       include: {
         subject: { select: { name: true, code: true } },
@@ -135,14 +133,14 @@ async function gatherPerformanceData(schoolId: string) {
       orderBy: { date: 'desc' },
       take: 20,
     }),
-    db.examResult.groupBy({
+    tenantDb.examResult.groupBy({
       by: ['examId'],
       _avg: { marksObtained: true },
       _count: { id: true },
       _min: { marksObtained: true },
       _max: { marksObtained: true },
     }),
-    db.student.groupBy({
+    tenantDb.student.groupBy({
       by: ['classId'],
       where: { schoolId, status: 'active' },
       _count: { id: true },
@@ -152,9 +150,9 @@ async function gatherPerformanceData(schoolId: string) {
   // Subject-wise performance
   const subjectPerformance = await Promise.all(
     (
-      await db.subject.findMany({ where: { schoolId } })
+      await tenantDb.subject.findMany({ where: { schoolId } })
     ).map(async (subject) => {
-      const subjectExams = await db.exam.findMany({
+      const subjectExams = await tenantDb.exam.findMany({
         where: { schoolId, subjectId: subject.id },
         include: { results: true },
       });
@@ -202,8 +200,10 @@ async function gatherPerformanceData(schoolId: string) {
   };
 }
 
-async function gatherAdminReportData(schoolId: string) {
-  const school = await db.school.findUnique({ where: { id: schoolId } });
+async function gatherAdminReportData(tenantDb: Awaited<ReturnType<typeof getTenantDbByCode>>, schoolId: string) {
+  if (!tenantDb) return null;
+
+  const school = await tenantDb.school.findUnique({ where: { id: schoolId } });
   if (!school) return null;
 
   const [
@@ -214,20 +214,20 @@ async function gatherAdminReportData(schoolId: string) {
     attendanceData,
     riskData,
   ] = await Promise.all([
-    db.student.count({ where: { schoolId, status: 'active' } }),
-    db.teacher.count({ where: { schoolId, status: 'active' } }),
-    db.class.count({ where: { schoolId } }),
-    db.feePayment.aggregate({
+    tenantDb.student.count({ where: { schoolId, status: 'active' } }),
+    tenantDb.teacher.count({ where: { schoolId, status: 'active' } }),
+    tenantDb.class.count({ where: { schoolId } }),
+    tenantDb.feePayment.aggregate({
       where: { schoolId },
       _sum: { amount: true, paidAmount: true },
       _count: true,
     }),
-    db.attendance.groupBy({
+    tenantDb.attendance.groupBy({
       by: ['status'],
       where: { schoolId },
       _count: { status: true },
     }),
-    db.student.groupBy({
+    tenantDb.student.groupBy({
       by: ['riskLevel'],
       where: { schoolId, status: 'active' },
       _count: { riskLevel: true },
@@ -238,7 +238,7 @@ async function gatherAdminReportData(schoolId: string) {
   const totalPaid = feeData._sum.paidAmount || 0;
 
   // Fee breakdown by status
-  const feeBreakdown = await db.feePayment.groupBy({
+  const feeBreakdown = await tenantDb.feePayment.groupBy({
     by: ['status'],
     where: { schoolId },
     _count: { status: true },
@@ -246,7 +246,7 @@ async function gatherAdminReportData(schoolId: string) {
   });
 
   // Gender distribution
-  const genderData = await db.student.groupBy({
+  const genderData = await tenantDb.student.groupBy({
     by: ['gender'],
     where: { schoolId, status: 'active' },
     _count: { gender: true },
@@ -292,14 +292,16 @@ async function gatherAdminReportData(schoolId: string) {
   };
 }
 
-async function gatherTeacherAssistantData(schoolId: string, classId?: string) {
+async function gatherTeacherAssistantData(tenantDb: Awaited<ReturnType<typeof getTenantDbByCode>>, schoolId: string, classId?: string) {
+  if (!tenantDb) return null;
+
   const whereCondition: Record<string, unknown> = { schoolId, status: 'active' };
   if (classId) {
     whereCondition.classId = classId;
   }
 
   const [students, subjects, exams] = await Promise.all([
-    db.student.findMany({
+    tenantDb.student.findMany({
       where: whereCondition,
       include: {
         class: { select: { name: true } },
@@ -318,7 +320,7 @@ async function gatherTeacherAssistantData(schoolId: string, classId?: string) {
         },
       },
     }),
-    db.subject.findMany({
+    tenantDb.subject.findMany({
       where: { schoolId },
       include: {
         teachers: {
@@ -328,7 +330,7 @@ async function gatherTeacherAssistantData(schoolId: string, classId?: string) {
         },
       },
     }),
-    db.exam.findMany({
+    tenantDb.exam.findMany({
       where: { schoolId },
       include: {
         subject: { select: { name: true } },
@@ -388,8 +390,9 @@ async function gatherTeacherAssistantData(schoolId: string, classId?: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, schoolId, classId, prompt } = body as {
+    const { type, schoolCode, schoolId, classId, prompt } = body as {
       type: InsightType;
+      schoolCode: string;
       schoolId: string;
       classId?: string;
       prompt?: string;
@@ -404,6 +407,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
     if (!schoolId) {
       return NextResponse.json(
         { success: false, error: 'schoolId is required' },
@@ -411,20 +421,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     // Gather relevant data from the database
     let contextData: unknown;
     switch (type) {
       case 'student_risk':
-        contextData = await gatherStudentRiskData(schoolId);
+        contextData = await gatherStudentRiskData(tenantDb, schoolId);
         break;
       case 'performance':
-        contextData = await gatherPerformanceData(schoolId);
+        contextData = await gatherPerformanceData(tenantDb, schoolId);
         break;
       case 'admin_report':
-        contextData = await gatherAdminReportData(schoolId);
+        contextData = await gatherAdminReportData(tenantDb, schoolId);
         break;
       case 'teacher_assistant':
-        contextData = await gatherTeacherAssistantData(schoolId, classId);
+        contextData = await gatherTeacherAssistantData(tenantDb, schoolId, classId);
         break;
     }
 

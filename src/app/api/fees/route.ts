@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const studentId = searchParams.get('studentId') || '';
     const status = searchParams.get('status') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     // Build where clause
     const where: Prisma.FeePaymentWhereInput = {};
@@ -33,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [payments, total] = await Promise.all([
-      db.feePayment.findMany({
+      tenantDb.feePayment.findMany({
         where,
         include: {
           student: {
@@ -50,24 +66,24 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.feePayment.count({ where }),
+      tenantDb.feePayment.count({ where }),
     ]);
 
     // Compute summary stats
     const [totalAmount, totalPaid, totalPending, statusBreakdown] = await Promise.all([
-      db.feePayment.aggregate({
+      tenantDb.feePayment.aggregate({
         where,
         _sum: { amount: true },
       }),
-      db.feePayment.aggregate({
+      tenantDb.feePayment.aggregate({
         where,
         _sum: { paidAmount: true },
       }),
-      db.feePayment.aggregate({
+      tenantDb.feePayment.aggregate({
         where: { ...where, status: { in: ['pending', 'overdue', 'partial'] } },
         _sum: { amount: true },
       }),
-      db.feePayment.groupBy({
+      tenantDb.feePayment.groupBy({
         by: ['status'],
         where,
         _count: { status: true },
@@ -116,6 +132,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       studentId,
       amount,
@@ -130,6 +147,21 @@ export async function POST(request: NextRequest) {
       remarks,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     // Validate required fields
     if (!schoolId || !studentId || !amount || !feeType || !dueDate) {
       return NextResponse.json(
@@ -139,7 +171,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if student exists
-    const student = await db.student.findUnique({
+    const student = await tenantDb.student.findUnique({
       where: { id: studentId },
     });
 
@@ -159,7 +191,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const feePayment = await db.feePayment.create({
+    const feePayment = await tenantDb.feePayment.create({
       data: {
         schoolId,
         studentId,
@@ -203,7 +235,22 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { paymentId, status, paidAmount, paymentMode, transactionId, paidDate, remarks } = body;
+    const { schoolCode, paymentId, status, paidAmount, paymentMode, transactionId, paidDate, remarks } = body;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     if (!paymentId) {
       return NextResponse.json(
@@ -213,7 +260,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Check if payment exists
-    const existingPayment = await db.feePayment.findUnique({
+    const existingPayment = await tenantDb.feePayment.findUnique({
       where: { id: paymentId },
     });
 
@@ -260,7 +307,7 @@ export async function PATCH(request: NextRequest) {
       updateData.remarks = remarks;
     }
 
-    const payment = await db.feePayment.update({
+    const payment = await tenantDb.feePayment.update({
       where: { id: paymentId },
       data: updateData,
       include: {

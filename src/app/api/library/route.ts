@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { getTenantDbByCode } from '@/lib/tenant-manager'
 import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const schoolCode = searchParams.get('schoolCode')
     const schoolId = searchParams.get('schoolId')
     const search = searchParams.get('search') || ''
     const category = searchParams.get('category') || ''
@@ -12,6 +13,15 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10)
     const limit = parseInt(searchParams.get('limit') || '20', 10)
     const skip = (page - 1) * limit
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId) {
       return NextResponse.json({ success: false, error: 'schoolId is required' }, { status: 400 })
@@ -21,10 +31,10 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { title: { contains: search } },
-        { author: { contains: search } },
-        { isbn: { contains: search } },
-        { publisher: { contains: search } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { author: { contains: search, mode: 'insensitive' } },
+        { isbn: { contains: search, mode: 'insensitive' } },
+        { publisher: { contains: search, mode: 'insensitive' } },
       ]
     }
 
@@ -37,7 +47,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [books, total] = await Promise.all([
-      db.libraryBook.findMany({
+      tenantDb.libraryBook.findMany({
         where,
         include: {
           issues: {
@@ -54,19 +64,19 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.libraryBook.count({ where }),
+      tenantDb.libraryBook.count({ where }),
     ])
 
     // Stats
     const [totalBooksAgg, availableBooksAgg, issuedBooks, overdueBooks] = await Promise.all([
-      db.libraryBook.aggregate({ where: { schoolId }, _sum: { totalCopies: true } }),
-      db.libraryBook.aggregate({ where: { schoolId }, _sum: { availableCopies: true } }),
-      db.bookIssue.count({ where: { schoolId, status: 'issued' } }),
-      db.bookIssue.count({ where: { schoolId, status: 'issued', dueDate: { lt: new Date() } } }),
+      tenantDb.libraryBook.aggregate({ where: { schoolId }, _sum: { totalCopies: true } }),
+      tenantDb.libraryBook.aggregate({ where: { schoolId }, _sum: { availableCopies: true } }),
+      tenantDb.bookIssue.count({ where: { schoolId, status: 'issued' } }),
+      tenantDb.bookIssue.count({ where: { schoolId, status: 'issued', dueDate: { lt: new Date() } } }),
     ])
 
     // All issues for tracking tab
-    const issues = await db.bookIssue.findMany({
+    const issues = await tenantDb.bookIssue.findMany({
       where: { schoolId },
       include: {
         book: { select: { id: true, title: true, author: true } },
@@ -77,7 +87,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Category breakdown for analytics
-    const categoryBreakdown = await db.libraryBook.groupBy({
+    const categoryBreakdown = await tenantDb.libraryBook.groupBy({
       by: ['category'],
       where: { schoolId },
       _count: { category: true },
@@ -122,9 +132,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const {
-      schoolId, title, author, isbn, publisher, category,
+      schoolCode, schoolId, title, author, isbn, publisher, category,
       totalCopies, shelfLocation, price,
     } = body
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (!schoolId || !title || !author) {
       return NextResponse.json(
@@ -134,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     const copies = totalCopies ? parseInt(String(totalCopies)) : 1
-    const book = await db.libraryBook.create({
+    const book = await tenantDb.libraryBook.create({
       data: {
         schoolId,
         title,
@@ -169,15 +188,24 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
-    const { action, issueId, bookId } = body
+    const { schoolCode, action, issueId, bookId } = body
+
+    if (!schoolCode) {
+      return NextResponse.json({ success: false, error: 'schoolCode is required' }, { status: 400 })
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode)
+    if (!tenantDb) {
+      return NextResponse.json({ success: false, error: 'Tenant not found' }, { status: 404 })
+    }
 
     if (action === 'return' && issueId) {
-      const issue = await db.bookIssue.update({
+      const issue = await tenantDb.bookIssue.update({
         where: { id: issueId },
         data: { status: 'returned', returnDate: new Date() },
       })
       if (issue.bookId) {
-        await db.libraryBook.update({
+        await tenantDb.libraryBook.update({
           where: { id: issue.bookId },
           data: { availableCopies: { increment: 1 } },
         })
@@ -190,11 +218,11 @@ export async function PATCH(request: NextRequest) {
       if (!studentId || !dueDate) {
         return NextResponse.json({ success: false, error: 'studentId and dueDate required' }, { status: 400 })
       }
-      const book = await db.libraryBook.findUnique({ where: { id: bookId } })
+      const book = await tenantDb.libraryBook.findUnique({ where: { id: bookId } })
       if (!book || book.availableCopies <= 0) {
         return NextResponse.json({ success: false, error: 'Book not available' }, { status: 400 })
       }
-      const issue = await db.bookIssue.create({
+      const issue = await tenantDb.bookIssue.create({
         data: {
           schoolId: book.schoolId,
           bookId,
@@ -203,7 +231,7 @@ export async function PATCH(request: NextRequest) {
           status: 'issued',
         },
       })
-      await db.libraryBook.update({
+      await tenantDb.libraryBook.update({
         where: { id: bookId },
         data: { availableCopies: { decrement: 1 } },
       })

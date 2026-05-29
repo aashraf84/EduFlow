@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getTenantDbByCode } from '@/lib/tenant-manager';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
     const search = searchParams.get('search') || '';
     const department = searchParams.get('department') || '';
@@ -12,6 +13,21 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
 
     const where: Prisma.LabWhereInput = {};
 
@@ -21,9 +37,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { incharge: { contains: search } },
-        { equipment: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { incharge: { contains: search, mode: 'insensitive' } },
+        { equipment: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -36,7 +52,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [labs, total] = await Promise.all([
-      db.lab.findMany({
+      tenantDb.lab.findMany({
         where,
         include: {
           schedules: {
@@ -53,21 +69,22 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      db.lab.count({ where }),
+      tenantDb.lab.count({ where }),
     ]);
 
     // Summary stats
+    const schoolIdFilter = schoolId || undefined;
     const [totalLabs, departmentBreakdown, totalSchedules] = await Promise.all([
-      db.lab.count({ where: { schoolId: schoolId || undefined } }),
-      db.lab.groupBy({
+      tenantDb.lab.count({ where: { schoolId: schoolIdFilter } }),
+      tenantDb.lab.groupBy({
         by: ['department'],
-        where: { schoolId: schoolId || undefined },
+        where: { schoolId: schoolIdFilter },
         _count: { department: true },
         _sum: { capacity: true },
         orderBy: { _count: { department: 'desc' } },
       }),
-      db.labSchedule.count({
-        where: { lab: { schoolId: schoolId || undefined } },
+      tenantDb.labSchedule.count({
+        where: { lab: { schoolId: schoolIdFilter } },
       }),
     ]);
 
@@ -78,8 +95,8 @@ export async function GET(request: NextRequest) {
         summary: {
           totalLabs,
           totalSchedules,
-          totalCapacity: (await db.lab.aggregate({
-            where: { schoolId: schoolId || undefined },
+          totalCapacity: (await tenantDb.lab.aggregate({
+            where: { schoolId: schoolIdFilter },
             _sum: { capacity: true },
           }))._sum.capacity || 0,
           departmentBreakdown: departmentBreakdown.map((d) => ({
@@ -109,6 +126,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
+      schoolCode,
       schoolId,
       name,
       department,
@@ -118,6 +136,21 @@ export async function POST(request: NextRequest) {
       status,
     } = body;
 
+    if (!schoolCode) {
+      return NextResponse.json(
+        { success: false, error: 'schoolCode is required' },
+        { status: 400 }
+      );
+    }
+
+    const tenantDb = await getTenantDbByCode(schoolCode);
+    if (!tenantDb) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant not found' },
+        { status: 404 }
+      );
+    }
+
     if (!schoolId || !name) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: schoolId, name' },
@@ -125,7 +158,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const lab = await db.lab.create({
+    const lab = await tenantDb.lab.create({
       data: {
         schoolId,
         name,
