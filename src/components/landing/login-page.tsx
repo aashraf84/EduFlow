@@ -4,10 +4,11 @@ import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  GraduationCap, Shield, Loader2, Key,
-  Brain, BarChart3, Users, BookOpen, Sparkles, Check
+  GraduationCap, Shield, Loader2, Key, Monitor, CheckCircle2,
+  Brain, BarChart3, Users, BookOpen, Sparkles, Check, ArrowRight, ArrowLeft
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const highlights = [
   { icon: GraduationCap, title: 'Student Intelligence', desc: 'Full lifecycle from admission to alumni' },
@@ -18,35 +19,217 @@ const highlights = [
   { icon: Sparkles, title: 'Multi-Tenant', desc: 'Isolated DB per institution' },
 ]
 
+// Device info helper
+function getDeviceInfo() {
+  if (typeof window === 'undefined') return { browser: 'Unknown', os: 'Unknown' }
+  const ua = navigator.userAgent
+  let browser = 'Unknown'
+  let os = 'Unknown'
+
+  if (ua.includes('Firefox')) browser = 'Firefox'
+  else if (ua.includes('Edg/')) browser = 'Edge'
+  else if (ua.includes('Chrome')) browser = 'Chrome'
+  else if (ua.includes('Safari')) browser = 'Safari'
+
+  if (ua.includes('Windows')) os = 'Windows'
+  else if (ua.includes('Mac OS')) os = 'macOS'
+  else if (ua.includes('Linux')) os = 'Linux'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iOS') || ua.includes('iPhone')) os = 'iOS'
+
+  return { browser, os }
+}
+
+// Generate a stable device fingerprint
+function generateDeviceFingerprint() {
+  if (typeof window === 'undefined') return ''
+  const { browser, os } = getDeviceInfo()
+  const screen = `${window.screen.width}x${window.screen.height}`
+  const lang = navigator.language
+  const raw = `${browser}|${os}|${screen}|${lang}`
+  // Simple hash
+  let hash = 0
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash
+  }
+  return `fp-${Math.abs(hash).toString(36)}-${browser.toLowerCase().replace(/\s/g, '')}-${os.toLowerCase().replace(/\s/g, '')}`
+}
+
+// Format serial key with dashes
+function formatSerialKey(value: string): string {
+  const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 25)
+  const parts = []
+  for (let i = 0; i < cleaned.length; i += 5) {
+    parts.push(cleaned.slice(i, i + 5))
+  }
+  return parts.join('-')
+}
+
+// localStorage helpers for device activation persistence
+const DEVICE_STORAGE_KEY = 'eduflow_device_activation'
+
+interface StoredActivation {
+  fingerprint: string
+  schoolCode: string
+  serialKey: string
+  tenantName: string
+  activatedAt: string
+}
+
+function getStoredActivation(): StoredActivation | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(DEVICE_STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as StoredActivation
+  } catch {
+    return null
+  }
+}
+
+function saveStoredActivation(data: StoredActivation) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(data))
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearStoredActivation() {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(DEVICE_STORAGE_KEY)
+  } catch {
+    // Ignore
+  }
+}
+
 export function LoginPage() {
   const { login, setActivated } = useAppStore()
-  const [schoolCode, setSchoolCode] = useState('GIA-001')
-  const [email, setEmail] = useState('admin@greenfieldacademy.edu')
-  const [password, setPassword] = useState('admin123')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // Step management: 'activation' | 'login'
+  const [step, setStep] = useState<'activation' | 'login'>('activation')
+  const [isCheckingDevice, setIsCheckingDevice] = useState(true)
+
+  // Activation step state
+  const [serialKey, setSerialKey] = useState('')
+  const [schoolCode, setSchoolCode] = useState('')
+  const [activationError, setActivationError] = useState('')
+  const [isActivating, setIsActivating] = useState(false)
+  const [deviceInfo, setDeviceInfo] = useState({ browser: 'Detecting...', os: 'Detecting...' })
+  const [activationData, setActivationData] = useState<{
+    tenantName: string
+    schoolCode: string
+    serialKey: string
+  } | null>(null)
+
+  // Login step state
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
+  // Check if device is already activated on mount
+  useEffect(() => {
+    const stored = getStoredActivation()
+    const fingerprint = generateDeviceFingerprint()
+
+    setDeviceInfo(getDeviceInfo())
+
+    if (stored && stored.fingerprint === fingerprint) {
+      // Device is already activated — skip to login
+      setSchoolCode(stored.schoolCode)
+      setActivationData({
+        tenantName: stored.tenantName,
+        schoolCode: stored.schoolCode,
+        serialKey: stored.serialKey,
+      })
+      setStep('login')
+    }
+
+    setIsCheckingDevice(false)
+  }, [])
+
+  // ============================================
+  // ACTIVATION HANDLER
+  // ============================================
+  const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    setError('')
+    setIsActivating(true)
+    setActivationError('')
+
+    const fingerprint = generateDeviceFingerprint()
+    const currentDeviceInfo = getDeviceInfo()
 
     try {
-      const res = await fetch('/api/auth', {
+      const res = await fetch('/api/activation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, schoolCode }),
+        body: JSON.stringify({
+          serialKey,
+          schoolCode,
+          deviceInfo: currentDeviceInfo,
+          fingerprint,
+        }),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || 'Login failed. Please check your credentials.')
+        setActivationError(data.error || 'Activation failed. Please check your serial key.')
+        return
+      }
+
+      // Save activation to localStorage
+      const tenantName = data.data?.tenant?.name || 'EduFlow School'
+      saveStoredActivation({
+        fingerprint,
+        schoolCode,
+        serialKey,
+        tenantName,
+        activatedAt: new Date().toISOString(),
+      })
+
+      setActivationData({ tenantName, schoolCode, serialKey })
+      setStep('login')
+    } catch {
+      setActivationError('Network error. Please check your connection and try again.')
+    } finally {
+      setIsActivating(false)
+    }
+  }
+
+  // ============================================
+  // LOGIN HANDLER
+  // ============================================
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoggingIn(true)
+    setLoginError('')
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          schoolCode: activationData?.schoolCode || schoolCode,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setLoginError(data.error || 'Login failed. Please check your credentials.')
         return
       }
 
       const userData = data.data?.user
-      const tenantCode = data.data?.tenantCode || schoolCode
+      const tenantCode = data.data?.tenantCode || activationData?.schoolCode || schoolCode
       const isOwner = data.data?.isOwner || false
       const isDemo = data.data?.isDemo || false
 
@@ -56,7 +239,7 @@ export function LoginPage() {
         email: userData?.email || email,
         role: isOwner ? 'owner' : (userData?.role || 'admin'),
         schoolId: userData?.schoolId || userData?.school?.id || '',
-        schoolName: userData?.school?.name || 'EduFlow School',
+        schoolName: userData?.school?.name || activationData?.tenantName || 'EduFlow School',
         isDemo,
         isViewOnly: isDemo,
         isOwner,
@@ -65,15 +248,18 @@ export function LoginPage() {
 
       setActivated(true)
     } catch {
-      setError('Network error. Please check your connection.')
+      setLoginError('Network error. Please check your connection.')
     } finally {
-      setIsLoading(false)
+      setIsLoggingIn(false)
     }
   }
 
+  // ============================================
+  // DEMO LOGIN HANDLER
+  // ============================================
   const handleDemoLogin = async () => {
-    setIsLoading(true)
-    setError('')
+    setIsLoggingIn(true)
+    setLoginError('')
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
@@ -130,11 +316,33 @@ export function LoginPage() {
       })
       setActivated(true)
     } finally {
-      setIsLoading(false)
+      setIsLoggingIn(false)
     }
   }
 
+  // Go back to activation step
+  const handleBackToActivation = () => {
+    clearStoredActivation()
+    setActivationData(null)
+    setStep('activation')
+    setEmail('')
+    setPassword('')
+    setLoginError('')
+  }
 
+  // ============================================
+  // RENDER
+  // ============================================
+  if (isCheckingDevice) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-950">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">Checking device...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -215,11 +423,11 @@ export function LoginPage() {
         </div>
       </div>
 
-      {/* Right Side — Login Form */}
+      {/* Right Side — Form Area */}
       <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-950 px-6 py-8">
-        <div className="w-full max-w-[380px] space-y-7">
+        <div className="w-full max-w-[400px]">
           {/* Mobile Branding */}
-          <div className="lg:hidden text-center space-y-2">
+          <div className="lg:hidden text-center space-y-2 mb-8">
             <div className="flex justify-center">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/30">
                 <GraduationCap className="h-5 w-5" />
@@ -228,109 +436,317 @@ export function LoginPage() {
             <h1 className="text-xl font-bold text-foreground">EduFlow OS</h1>
           </div>
 
-          {/* Welcome */}
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">Welcome back</h2>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to your institution&apos;s dashboard</p>
+          {/* Step Indicator */}
+          <div className="flex items-center gap-2 mb-6">
+            <div className={`flex items-center gap-1.5 text-xs font-medium ${step === 'activation' ? 'text-emerald-600 dark:text-emerald-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 'activation' ? 'bg-emerald-500 text-white' : 'bg-emerald-500 text-white'}`}>
+                {step === 'login' ? <CheckCircle2 className="h-3 w-3" /> : '1'}
+              </div>
+              <span>Activate</span>
+            </div>
+            <div className={`flex-1 h-px ${step === 'login' ? 'bg-emerald-400' : 'bg-border'}`} />
+            <div className={`flex items-center gap-1.5 text-xs font-medium ${step === 'login' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+              <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 'login' ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'}`}>
+                2
+              </div>
+              <span>Sign In</span>
+            </div>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="schoolCode">
-                School Code
-              </label>
-              <div className="relative">
-                <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
-                <Input
-                  id="schoolCode"
-                  type="text"
-                  value={schoolCode}
-                  onChange={(e) => setSchoolCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. GIA-001"
-                  className="rounded-lg pl-9 h-10 uppercase text-sm"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="email">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@school.edu"
-                className="rounded-lg h-10 text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="password">
-                  Password
-                </label>
-                <button type="button" className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline">
-                  Forgot password?
-                </button>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="rounded-lg h-10 text-sm"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-                <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg h-10 text-sm font-semibold shadow-md shadow-emerald-200/50 dark:shadow-emerald-900/30"
-            >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Signing in...</span>
+          <AnimatePresence mode="wait">
+            {step === 'activation' ? (
+              /* ============================================
+                 STEP 1: ACTIVATION
+                 ============================================ */
+              <motion.div
+                key="activation"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className="space-y-5"
+              >
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground">Activate Device</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Enter your serial key and school code to register this device
+                  </p>
                 </div>
-              ) : (
-                'Sign In'
-              )}
-            </Button>
-          </form>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-[10px]">
-              <span className="bg-white dark:bg-gray-950 px-3 text-muted-foreground uppercase tracking-wider">Quick Access</span>
-            </div>
-          </div>
+                <form onSubmit={handleActivate} className="space-y-4">
+                  {/* Serial Key */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="serialKey">
+                      Serial Key
+                    </label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+                      <Input
+                        id="serialKey"
+                        value={serialKey}
+                        onChange={(e) => {
+                          setSerialKey(formatSerialKey(e.target.value))
+                          if (activationError) setActivationError('')
+                        }}
+                        placeholder="EDUF-XXXXX-XXXXX-XXXXX-XXXXX"
+                        className="rounded-lg pl-9 h-11 uppercase text-sm font-mono tracking-wider"
+                        maxLength={29}
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
 
-          <div className="space-y-2.5">
-            <Button
-              variant="outline"
-              onClick={handleDemoLogin}
-              disabled={isLoading}
-              className="w-full rounded-lg h-9 text-sm border-dashed"
-            >
-              <Shield className="h-3.5 w-3.5 mr-2 text-amber-500" />
-              Demo Login (View Only)
-            </Button>
-          </div>
+                  {/* School Code */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="schoolCode">
+                      School Code
+                    </label>
+                    <Input
+                      id="schoolCode"
+                      type="text"
+                      value={schoolCode}
+                      onChange={(e) => {
+                        setSchoolCode(e.target.value.toUpperCase())
+                        if (activationError) setActivationError('')
+                      }}
+                      placeholder="e.g. GIA-001"
+                      className="rounded-lg h-11 uppercase text-sm tracking-wider"
+                      autoComplete="off"
+                    />
+                  </div>
 
-          <p className="text-center text-[10px] text-muted-foreground/60 leading-relaxed">
-            By signing in, you agree to our Terms of Service and Privacy Policy.
-            <br />
-            Demo mode provides read-only access to explore the platform.
-          </p>
+                  {/* Device Info Card */}
+                  <div className="bg-muted/50 rounded-lg border border-border/50 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Detected Device</span>
+                    </div>
+                    <div className="flex gap-4">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Browser</span>
+                        <p className="text-xs font-medium text-foreground">{deviceInfo.browser}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">OS</span>
+                        <p className="text-xs font-medium text-foreground">{deviceInfo.os}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Error */}
+                  {activationError && (
+                    <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+                      <p className="text-xs text-red-600 dark:text-red-400">{activationError}</p>
+                    </div>
+                  )}
+
+                  {/* Activate Button */}
+                  <Button
+                    type="submit"
+                    disabled={isActivating || serialKey.replace(/-/g, '').length < 20 || !schoolCode}
+                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg h-11 text-sm font-semibold shadow-md shadow-emerald-200/50 dark:shadow-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    {isActivating ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Activating...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        <span>Activate & Continue</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </div>
+                    )}
+                  </Button>
+                </form>
+
+                {/* Divider */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-[10px]">
+                    <span className="bg-white dark:bg-gray-950 px-3 text-muted-foreground uppercase tracking-wider">or explore</span>
+                  </div>
+                </div>
+
+                {/* Demo Login */}
+                <Button
+                  variant="outline"
+                  onClick={handleDemoLogin}
+                  disabled={isLoggingIn}
+                  className="w-full rounded-lg h-9 text-sm border-dashed"
+                >
+                  <Shield className="h-3.5 w-3.5 mr-2 text-amber-500" />
+                  Demo Mode (View Only)
+                </Button>
+
+                <p className="text-center text-[10px] text-muted-foreground/60 leading-relaxed">
+                  New devices require a valid serial key for activation.
+                  <br />
+                  Demo mode provides read-only access without activation.
+                </p>
+              </motion.div>
+            ) : (
+              /* ============================================
+                 STEP 2: LOGIN
+                 ============================================ */
+              <motion.div
+                key="login"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className="space-y-5"
+              >
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground">Welcome back</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Sign in to <span className="font-medium text-emerald-600 dark:text-emerald-400">{activationData?.tenantName || schoolCode}</span>
+                  </p>
+                </div>
+
+                {/* Activated Device Badge */}
+                <div className="flex items-center gap-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Device Activated</p>
+                    <p className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70 truncate">
+                      {deviceInfo.browser} on {deviceInfo.os} · Key: {activationData?.serialKey?.slice(0, 16)}...
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleBackToActivation}
+                    className="text-[10px] text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                  >
+                    Change
+                  </button>
+                </div>
+
+                <form onSubmit={handleLogin} className="space-y-4">
+                  {/* School Code (read-only, pre-filled from activation) */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="loginSchoolCode">
+                      School Code
+                    </label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+                      <Input
+                        id="loginSchoolCode"
+                        type="text"
+                        value={activationData?.schoolCode || schoolCode}
+                        readOnly
+                        className="rounded-lg pl-9 h-10 uppercase text-sm bg-muted/50 text-muted-foreground"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor="email">
+                      Email
+                    </label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        if (loginError) setLoginError('')
+                      }}
+                      placeholder="admin@school.edu"
+                      className="rounded-lg h-10 text-sm"
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="password">
+                        Password
+                      </label>
+                      <button type="button" className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline">
+                        Forgot password?
+                      </button>
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value)
+                        if (loginError) setLoginError('')
+                      }}
+                      placeholder="Enter your password"
+                      className="rounded-lg h-10 text-sm"
+                    />
+                  </div>
+
+                  {/* Error */}
+                  {loginError && (
+                    <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+                      <p className="text-xs text-red-600 dark:text-red-400">{loginError}</p>
+                    </div>
+                  )}
+
+                  {/* Sign In Button */}
+                  <Button
+                    type="submit"
+                    disabled={isLoggingIn}
+                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg h-10 text-sm font-semibold shadow-md shadow-emerald-200/50 dark:shadow-emerald-900/30"
+                  >
+                    {isLoggingIn ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Signing in...</span>
+                      </div>
+                    ) : (
+                      'Sign In'
+                    )}
+                  </Button>
+                </form>
+
+                {/* Divider */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-[10px]">
+                    <span className="bg-white dark:bg-gray-950 px-3 text-muted-foreground uppercase tracking-wider">Quick Access</span>
+                  </div>
+                </div>
+
+                {/* Demo + Back */}
+                <div className="space-y-2.5">
+                  <Button
+                    variant="outline"
+                    onClick={handleDemoLogin}
+                    disabled={isLoggingIn}
+                    className="w-full rounded-lg h-9 text-sm border-dashed"
+                  >
+                    <Shield className="h-3.5 w-3.5 mr-2 text-amber-500" />
+                    Demo Login (View Only)
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    onClick={handleBackToActivation}
+                    className="w-full rounded-lg h-9 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+                    Use Different Serial Key
+                  </Button>
+                </div>
+
+                <p className="text-center text-[10px] text-muted-foreground/60 leading-relaxed">
+                  By signing in, you agree to our Terms of Service and Privacy Policy.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

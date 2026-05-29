@@ -4,7 +4,7 @@ import { masterDb, getTenantDbByCode } from '@/lib/tenant-manager';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { serialKey, schoolCode, deviceInfo } = body;
+    const { serialKey, schoolCode, deviceInfo, fingerprint: clientFingerprint } = body;
 
     if (!serialKey) {
       return NextResponse.json(
@@ -20,10 +20,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate device fingerprint from browser info
+    // Use client-provided fingerprint or generate one from browser info
     const browser = deviceInfo?.browser || 'Unknown';
     const os = deviceInfo?.os || 'Unknown';
-    const deviceFingerprint = `fp-${browser.toLowerCase().replace(/\s/g, '')}-${os.toLowerCase().replace(/\s/g, '')}-${Date.now().toString(36)}`;
+    const deviceFingerprint = clientFingerprint || `fp-${browser.toLowerCase().replace(/\s/g, '')}-${os.toLowerCase().replace(/\s/g, '')}-${Date.now().toString(36)}`;
     const deviceName = `${browser} on ${os}`;
 
     // ============================================
