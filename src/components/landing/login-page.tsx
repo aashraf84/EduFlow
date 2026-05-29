@@ -333,8 +333,8 @@ export function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'ashraf.saagar@gmail.com',
-          password: 'owner123',
+          email: 'admin@apexflow.ai',
+          password: 'Admin@180H',
           schoolCode: 'OWNER',
         }),
       })
@@ -349,7 +349,7 @@ export function LoginPage() {
       login({
         id: data.data?.user?.id || 'owner',
         name: data.data?.user?.name || 'EduFlow Owner',
-        email: data.data?.user?.email || 'ashraf.saagar@gmail.com',
+        email: data.data?.user?.email || 'admin@apexflow.ai',
         role: 'owner',
         schoolId: '',
         schoolName: 'EduFlow OS Platform',
