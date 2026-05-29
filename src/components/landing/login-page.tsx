@@ -57,8 +57,13 @@ function generateDeviceFingerprint() {
   return `fp-${Math.abs(hash).toString(36)}-${browser.toLowerCase().replace(/\s/g, '')}-${os.toLowerCase().replace(/\s/g, '')}`
 }
 
-// Format serial key with dashes
-function formatSerialKey(value: string): string {
+// Format serial key — preserves existing dashes on paste, auto-formats on manual typing
+function formatSerialKey(value: string, isPaste: boolean = false): string {
+  if (isPaste) {
+    // On paste: just uppercase and trim whitespace, preserve original format
+    return value.toUpperCase().trim()
+  }
+  // On manual typing: strip non-alphanumeric, uppercase, group by 5 with dashes
   const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 25)
   const parts = []
   for (let i = 0; i < cleaned.length; i += 5) {
@@ -489,9 +494,14 @@ export function LoginPage() {
                           setSerialKey(formatSerialKey(e.target.value))
                           if (activationError) setActivationError('')
                         }}
+                        onPaste={(e) => {
+                          e.preventDefault()
+                          const pasted = e.clipboardData.getData('text')
+                          setSerialKey(formatSerialKey(pasted, true))
+                          if (activationError) setActivationError('')
+                        }}
                         placeholder="EDUF-XXXXX-XXXXX-XXXXX-XXXXX"
                         className="rounded-lg pl-9 h-11 uppercase text-sm font-mono tracking-wider"
-                        maxLength={29}
                         autoComplete="off"
                       />
                     </div>
