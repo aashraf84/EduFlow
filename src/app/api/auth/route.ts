@@ -21,56 +21,6 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================
-    // OWNER LOGIN PATH
-    // ============================================
-    if (schoolCode.toUpperCase() === 'OWNER') {
-      const owner = await masterDb.ownerUser.findUnique({
-        where: { email },
-      });
-
-      if (!owner) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid email or password' },
-          { status: 401 }
-        );
-      }
-
-      const expectedPassword = `hashed_${password}`;
-      if (owner.password !== expectedPassword) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid email or password' },
-          { status: 401 }
-        );
-      }
-
-      if (owner.status !== 'active') {
-        return NextResponse.json(
-          { success: false, error: 'Account is inactive. Please contact system administrator.' },
-          { status: 403 }
-        );
-      }
-
-      // Update last login
-      await masterDb.ownerUser.update({
-        where: { id: owner.id },
-        data: { lastLogin: new Date() },
-      });
-
-      const { password: _, ...ownerWithoutPassword } = owner;
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          user: ownerWithoutPassword,
-          token: `demo_token_${owner.id}_${Date.now()}`,
-          tenantCode: 'OWNER',
-          isDemo: false,
-          isOwner: true,
-        },
-      });
-    }
-
-    // ============================================
     // TENANT USER LOGIN PATH
     // ============================================
 
@@ -164,7 +114,7 @@ export async function POST(request: NextRequest) {
         token: `demo_token_${user.id}_${Date.now()}`,
         tenantCode: tenant.code,
         isDemo: user.isDemo,
-        isOwner: false,
+        isOwner: user.role === 'admin',
       },
     });
   } catch (error) {

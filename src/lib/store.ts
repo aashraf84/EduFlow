@@ -70,7 +70,7 @@ export const useAppStore = create<AppState>((set) => ({
     user, 
     isAuthenticated: true, 
     view: 'app', 
-    module: user.isOwner ? 'owner' : 'dashboard',
+    module: 'dashboard',
     isDemo: user.isDemo ?? false,
     isViewOnly: user.isViewOnly ?? false,
     isOwner: user.isOwner ?? false,

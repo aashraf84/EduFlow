@@ -4,7 +4,7 @@ import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  GraduationCap, Shield, Loader2, Building2, Key,
+  GraduationCap, Shield, Loader2, Key,
   Brain, BarChart3, Users, BookOpen, Sparkles, Check
 } from 'lucide-react'
 import { useState } from 'react'
@@ -134,45 +134,7 @@ export function LoginPage() {
     }
   }
 
-  const handleOwnerLogin = async () => {
-    setIsLoading(true)
-    setError('')
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: 'owner@eduflow.io',
-          password: 'owner123',
-          schoolCode: 'OWNER',
-        }),
-      })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || 'Owner login failed.')
-        return
-      }
-
-      const userData = data.data?.user
-      login({
-        id: userData?.id || 'owner',
-        name: userData?.name || 'EduFlow Owner',
-        email: userData?.email || 'owner@eduflow.io',
-        role: 'owner',
-        schoolId: '',
-        schoolName: 'EduFlow OS Platform',
-        isOwner: true,
-        tenantCode: 'OWNER',
-      })
-      setActivated(true)
-    } catch {
-      setError('Network error. Please check your connection.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   return (
     <div className="min-h-screen flex">
@@ -362,22 +324,12 @@ export function LoginPage() {
               <Shield className="h-3.5 w-3.5 mr-2 text-amber-500" />
               Demo Login (View Only)
             </Button>
-
-            <Button
-              variant="outline"
-              onClick={handleOwnerLogin}
-              disabled={isLoading}
-              className="w-full rounded-lg h-9 text-sm border-dashed"
-            >
-              <Building2 className="h-3.5 w-3.5 mr-2 text-purple-500" />
-              Platform Owner
-            </Button>
           </div>
 
           <p className="text-center text-[10px] text-muted-foreground/60 leading-relaxed">
             By signing in, you agree to our Terms of Service and Privacy Policy.
             <br />
-            Demo mode provides read-only access · Owner login manages the platform.
+            Demo mode provides read-only access to explore the platform.
           </p>
         </div>
       </div>
