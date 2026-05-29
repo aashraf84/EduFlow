@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 
 export type AppView = 'landing' | 'login' | 'app'
-export type AppModule = 'dashboard' | 'students' | 'teachers' | 'attendance' | 'exams' | 'fees' | 'communication' | 'ai' | 'settings'
+export type AppModule = 
+  | 'dashboard' | 'students' | 'teachers' | 'attendance' | 'exams' | 'fees' 
+  | 'communication' | 'ai' | 'settings'
+  | 'library' | 'transport' | 'hostel' | 'alumni' | 'hr' | 'inventory' 
+  | 'lms' | 'admission' | 'placement' | 'scholarship' | 'health' | 'lab'
 
 export interface User {
   id: string

@@ -40,6 +40,18 @@ model School {
   sessions       AcademicSession[]
   notifications  Notification[]
   parents        Parent[]
+  libraryBooks   LibraryBook[]
+  transportRoutes TransportRoute[]
+  hostels        Hostel[]
+  alumni         Alumni[]
+  staffMembers   StaffMember[]
+  assets         Asset[]
+  courses        Course[]
+  admissions     Admission[]
+  placements     Placement[]
+  scholarships   Scholarship[]
+  healthRecords  HealthRecord[]
+  labs           Lab[]
 }
 
 model AcademicSession {
@@ -135,6 +147,12 @@ model Student {
   examResults  ExamResult[]
   feePayments  FeePayment[]
   behaviorLogs BehaviorLog[]
+  bookIssues   BookIssue[]
+  transportAssignments TransportAssignment[]
+  hostelAllocations HostelAllocation[]
+  courseEnrollments CourseEnrollment[]
+  placements   Placement[]
+  healthRecords HealthRecord[]
 
   @@index([schoolId])
   @@index([classId])
@@ -464,4 +482,482 @@ model TimetableSlot {
 
   @@index([classId])
   @@index([teacherId])
+}
+
+// ============================================
+// LIBRARY MANAGEMENT SYSTEM
+// ============================================
+
+model LibraryBook {
+  id           String   @id @default(cuid())
+  schoolId     String
+  title        String
+  author       String
+  isbn         String?
+  publisher    String?
+  category     String?
+  totalCopies  Int      @default(1)
+  availableCopies Int   @default(1)
+  shelfLocation String?
+  edition      String?
+  price        Float?
+  status       String   @default("available")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school    School        @relation(fields: [schoolId], references: [id])
+  issues    BookIssue[]
+
+  @@index([schoolId])
+  @@index([category])
+}
+
+model BookIssue {
+  id         String    @id @default(cuid())
+  schoolId   String
+  bookId     String
+  studentId  String
+  issueDate  DateTime  @default(now())
+  dueDate    DateTime
+  returnDate DateTime?
+  fine       Float     @default(0)
+  status     String    @default("issued")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  book    LibraryBook @relation(fields: [bookId], references: [id])
+  student Student     @relation(fields: [studentId], references: [id])
+
+  @@index([schoolId])
+  @@index([studentId])
+  @@index([status])
+}
+
+// ============================================
+// TRANSPORT MANAGEMENT SYSTEM
+// ============================================
+
+model TransportRoute {
+  id          String   @id @default(cuid())
+  schoolId    String
+  routeName   String
+  routeNumber String
+  driverName  String
+  driverPhone String
+  vehicleNo   String
+  capacity    Int      @default(40)
+  stops       String?
+  morningTime String?
+  eveningTime String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School           @relation(fields: [schoolId], references: [id])
+  assignments TransportAssignment[]
+
+  @@index([schoolId])
+}
+
+model TransportAssignment {
+  id        String   @id @default(cuid())
+  schoolId  String
+  routeId   String
+  studentId String
+  pickupPoint String?
+  dropPoint   String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  route   TransportRoute @relation(fields: [routeId], references: [id])
+  student Student        @relation(fields: [studentId], references: [id])
+
+  @@index([routeId])
+  @@index([studentId])
+}
+
+// ============================================
+// HOSTEL & RESIDENCE SYSTEM
+// ============================================
+
+model Hostel {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  type         String   @default("boys")
+  capacity     Int      @default(100)
+  wardenName   String?
+  wardenPhone  String?
+  floors       Int      @default(3)
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school  School        @relation(fields: [schoolId], references: [id])
+  rooms   HostelRoom[]
+
+  @@index([schoolId])
+}
+
+model HostelRoom {
+  id         String   @id @default(cuid())
+  hostelId   String
+  roomNumber String
+  floor      Int
+  capacity   Int      @default(2)
+  occupants  Int      @default(0)
+  roomType   String   @default("shared")
+  status     String   @default("available")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  hostel      Hostel          @relation(fields: [hostelId], references: [id])
+  allocations HostelAllocation[]
+
+  @@index([hostelId])
+}
+
+model HostelAllocation {
+  id         String   @id @default(cuid())
+  schoolId   String
+  studentId  String
+  roomId     String
+  checkIn    DateTime @default(now())
+  checkOut   DateTime?
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+
+  room    HostelRoom @relation(fields: [roomId], references: [id])
+  student Student    @relation(fields: [studentId], references: [id])
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+// ============================================
+// ALUMNI NETWORK SYSTEM
+// ============================================
+
+model Alumni {
+  id              String   @id @default(cuid())
+  schoolId        String
+  name            String
+  email           String
+  phone           String?
+  graduationYear  Int
+  degree          String?
+  department      String?
+  currentCompany  String?
+  currentRole     String?
+  linkedIn        String?
+  address         String?
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([graduationYear])
+}
+
+// ============================================
+// HR & PAYROLL SYSTEM
+// ============================================
+
+model StaffMember {
+  id            String   @id @default(cuid())
+  schoolId      String
+  employeeId    String   @unique
+  name          String
+  email         String?
+  phone         String?
+  department    String?
+  designation   String?
+  dateOfJoining DateTime @default(now())
+  salary        Float?
+  bankAccount   String?
+  panNumber     String?
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school  School       @relation(fields: [schoolId], references: [id])
+  payroll PayrollRecord[]
+  leaves  LeaveRecord[]
+
+  @@index([schoolId])
+  @@index([department])
+}
+
+model PayrollRecord {
+  id         String   @id @default(cuid())
+  schoolId   String
+  staffId    String
+  month      String
+  basicPay   Float
+  allowances Float    @default(0)
+  deductions Float    @default(0)
+  netPay     Float
+  status     String   @default("pending")
+  paidDate   DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  staff StaffMember @relation(fields: [staffId], references: [id])
+
+  @@index([schoolId])
+  @@index([staffId])
+  @@index([status])
+}
+
+model LeaveRecord {
+  id         String   @id @default(cuid())
+  schoolId   String
+  staffId    String
+  leaveType  String
+  startDate  DateTime
+  endDate    DateTime
+  days       Int
+  reason     String?
+  status     String   @default("pending")
+  approvedBy String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  staff StaffMember @relation(fields: [staffId], references: [id])
+
+  @@index([schoolId])
+  @@index([staffId])
+  @@index([status])
+}
+
+// ============================================
+// INVENTORY & ASSET MANAGEMENT
+// ============================================
+
+model Asset {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  assetCode    String   @unique
+  category     String
+  purchaseDate DateTime @default(now())
+  purchaseCost Float
+  condition    String   @default("good")
+  location     String?
+  assignedTo   String?
+  vendor       String?
+  warrantyEnd  DateTime?
+  depreciation Float    @default(0)
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([category])
+  @@index([status])
+}
+
+// ============================================
+// LMS / ONLINE LEARNING SYSTEM
+// ============================================
+
+model Course {
+  id          String   @id @default(cuid())
+  schoolId    String
+  title       String
+  code        String?
+  description String?
+  instructor  String?
+  classId     String?
+  subjectId   String?
+  thumbnail   String?
+  duration    Int?
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school    School          @relation(fields: [schoolId], references: [id])
+  materials CourseMaterial[]
+  enrollments CourseEnrollment[]
+
+  @@index([schoolId])
+  @@index([status])
+}
+
+model CourseMaterial {
+  id         String   @id @default(cuid())
+  courseId   String
+  title      String
+  type       String   @default("video")
+  url        String?
+  content    String?
+  order      Int      @default(0)
+  duration   Int?
+  createdAt  DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@index([courseId])
+}
+
+model CourseEnrollment {
+  id         String   @id @default(cuid())
+  courseId   String
+  studentId  String
+  progress   Float    @default(0)
+  enrolledAt DateTime @default(now())
+  completedAt DateTime?
+  status     String   @default("active")
+
+  course  Course  @relation(fields: [courseId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@unique([courseId, studentId])
+  @@index([studentId])
+}
+
+// ============================================
+// ADMISSION PORTAL SYSTEM
+// ============================================
+
+model Admission {
+  id              String   @id @default(cuid())
+  schoolId        String
+  applicantName   String
+  email           String
+  phone           String?
+  appliedClass    String?
+  previousSchool  String?
+  gpa             Float?
+  documents       String?
+  status          String   @default("applied")
+  applicationDate DateTime @default(now())
+  reviewedBy      String?
+  reviewDate      DateTime?
+  remarks         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([status])
+}
+
+// ============================================
+// PLACEMENT & CAREER CELL
+// ============================================
+
+model Placement {
+  id            String   @id @default(cuid())
+  schoolId      String
+  studentId     String
+  companyName   String
+  position      String
+  package       Float?
+  placementDate DateTime @default(now())
+  type          String   @default("job")
+  status        String   @default("offered")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school  School  @relation(fields: [schoolId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+// ============================================
+// SCHOLARSHIP MANAGEMENT
+// ============================================
+
+model Scholarship {
+  id             String   @id @default(cuid())
+  schoolId       String
+  name           String
+  description    String?
+  amount         Float
+  eligibility    String?
+  deadline       DateTime?
+  type           String   @default("merit")
+  status         String   @default("active")
+  applicationCount Int   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([type])
+}
+
+// ============================================
+// HEALTH & MEDICAL RECORDS
+// ============================================
+
+model HealthRecord {
+  id            String   @id @default(cuid())
+  schoolId      String
+  studentId     String
+  school        School   @relation(fields: [schoolId], references: [id])
+  height        Float?
+  weight        Float?
+  bloodGroup    String?
+  vision        String?
+  allergies     String?
+  conditions    String?
+  medications   String?
+  lastCheckup   DateTime?
+  doctorName    String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([schoolId])
+  @@index([studentId])
+}
+
+// ============================================
+// LAB MANAGEMENT SYSTEM
+// ============================================
+
+model Lab {
+  id          String   @id @default(cuid())
+  schoolId    String
+  name        String
+  department  String?
+  capacity    Int      @default(30)
+  equipment   String?
+  incharge    String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school    School      @relation(fields: [schoolId], references: [id])
+  schedules LabSchedule[]
+
+  @@index([schoolId])
+}
+
+model LabSchedule {
+  id        String   @id @default(cuid())
+  labId     String
+  classId   String
+  subjectId String
+  day       String
+  startTime String
+  endTime   String
+  createdAt DateTime @default(now())
+
+  lab  Lab  @relation(fields: [labId], references: [id])
+
+  @@index([labId])
+  @@index([classId])
 }
