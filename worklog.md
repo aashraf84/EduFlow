@@ -407,3 +407,107 @@ Stage Summary:
 - Landing page showcases all 21+ modules
 - 4 institution types: Schools, Colleges, Universities, Academies
 - 3 pricing tiers: Starter, Growth, Enterprise
+
+---
+
+## Task 4 - Create 7 Owner/Licensing API Route Files
+
+**Date**: 2024-03-05
+**Status**: ✅ Completed
+
+### Files Created
+
+1. **`/src/app/api/activation/route.ts`** - Serial key activation and device registration
+   - POST: Activate serial key, validate key/school/client, register devices (auto-approve first device), update serial key and school status
+   - GET: Check activation status by schoolCode, returns serial key details, device list, current device approval status
+
+2. **`/src/app/api/owner/clients/route.ts`** - Client management
+   - GET: List all clients with aggregated stats (school count, serial key count, device count), supports search, status filter, pagination
+   - POST: Create new client with validation (required: companyName, contactPerson, email)
+
+3. **`/src/app/api/owner/serial-keys/route.ts`** - Serial key management
+   - GET: List all serial keys with client/school info, supports clientId/status filter, pagination
+   - POST: Generate serial key with format "EDUF-YEAR-XXXX-XXXX-XXXX", validates client exists, ensures unique key
+
+4. **`/src/app/api/owner/devices/route.ts`** - Device management
+   - GET: List devices with client/serialKey/school info, supports clientId/serialKeyId/status filters, pagination
+   - PATCH: Approve or revoke a device by deviceId
+
+5. **`/src/app/api/owner/invoices/route.ts`** - Invoice management
+   - GET: List invoices with client info and items, supports clientId/status filter, pagination
+   - POST: Create invoice with items, auto-generates invoiceNumber (INV-YEAR-XXX), auto-calculates subtotal/taxAmount/total
+
+6. **`/src/app/api/owner/quotations/route.ts`** - Quotation management
+   - GET: List quotations with client info and items, supports clientId/status filter, pagination
+   - POST: Create quotation with items, auto-generates quotationNumber (QUO-YEAR-XXX), auto-calculates subtotal/taxAmount/total
+
+7. **`/src/app/api/owner/dashboard/route.ts`** - Owner dashboard stats
+   - GET: Returns comprehensive stats - client counts (total/active/trial), serial key counts (total/activated/available/expired), device counts (total/approved/pending), revenue (total + outstanding), recent invoices/quotations (last 5 each)
+
+### Patterns Followed
+- Same import pattern: `import { db } from '@/lib/db'`, `NextRequest`, `NextResponse`
+- Consistent error handling with try/catch, console.error logging, proper HTTP status codes
+- Response format: `{ success: boolean, data?: any, error?: string }`
+- Pagination support: page, limit, skip, total, totalPages
+- Prisma known error handling (P2002 unique constraint violations)
+- Search/filter query params with Prisma where clauses
+
+### Verification
+- ESLint: ✅ Passed (no errors)
+- Dev server: ✅ Running without errors
+
+## Task 3 - Owner/Licensing Seed Data (2025-03-05)
+
+**Agent**: Main Agent
+**Task**: Update prisma/seed.ts to add Owner/Licensing demo data
+
+### Changes Made
+- Added Owner/Licensing seed data section to `/home/z/my-project/prisma/seed.ts` before the final console.log
+- Data added includes:
+  1. **3 Clients**: Greenfield Education Group, Pinnacle Academy Trust, Horizon University Systems
+  2. **5 Serial Keys**: EDUF-2024-XK9F-A7B2-C4D8 (activated, linked to school), EDUF-2024-MN3P-Q5R6-S8T1 (available), EDUF-2024-WY4Z-H2J6-K8L3 (available), EDUF-2024-UV7W-E9F3-G5H1 (available), EDUF-2024-AB1C-D2E3-F4G5 (expired)
+  3. **School Update**: Set clientId=client1.id and activationStatus="active" on demo school (GIA-001)
+  4. **3 Devices**: Admin Desktop (Chrome/Win11, approved), Principal MacBook (Firefox/macOS, approved), Teacher iPad (Safari/iOS, pending)
+  5. **2 Invoices**: INV-2024-001 (paid, $6597.8), INV-2024-002 (sent, $3847.8) with items
+  6. **2 Quotations**: QUO-2024-001 (sent, $11544.5), QUO-2024-002 (draft, $1097.8) with items
+
+### Verification
+- Database was reset and re-seeded successfully
+- All counts verified via Prisma Client: 3 clients, 5 serial keys, 3 devices, 2 invoices (4 items), 2 quotations (4 items)
+- School GIA-001 clientId and activationStatus confirmed set correctly
+
+---
+Task ID: 29
+Agent: Main Architect
+Task: Add Serial Key Activation, Demo Login (View-Only), Owner Module with Client/Key/Device/Invoice/Quotation Management
+
+Work Log:
+- Updated Prisma schema: Added Client, SerialKey, Device, Invoice, InvoiceItem, Quotation, QuotationItem models
+- Added to School model: institutionType, clientId, activationStatus fields
+- Ran db:push successfully, regenerated Prisma client
+- Seeded 3 clients, 5 serial keys, 3 devices, 2 invoices, 2 quotations
+- Updated school activationStatus to "active" for demo school
+- Built 7 new API routes: /api/activation, /api/owner/clients, /api/owner/serial-keys, /api/owner/devices, /api/owner/invoices, /api/owner/quotations, /api/owner/dashboard
+- Fixed all API response formats to match frontend expectations (flat arrays, string client names)
+- Updated store.ts: Added 'owner' to AppModule, isDemo, isViewOnly, isActivated state
+- Created activation screen with serial key input, device detection, demo mode entry
+- Updated login page with real API auth call + "Demo Login (View Only)" button
+- Updated page.tsx to show ActivationScreen when not activated
+- Created comprehensive OwnerModule (1406 lines) with 5 tabs:
+  - Dashboard: 6 stat cards (Clients, Keys, Devices, Revenue, Outstanding, Pending)
+  - Clients: Add/edit clients, table with company/contact/status/stats
+  - Serial Keys: Generate keys with plan selection, copy-to-clipboard, status badges
+  - Devices: Filter by client/status, approve/revoke devices
+  - Invoices & Quotations: Sub-tabs, create with line items, professional letter-size print view
+- Updated app-shell: Added "Business" section with Owner Hub, view-only amber banner
+- All APIs verified working: Dashboard returns 3 clients, $6,597.80 revenue, 2 invoices, 2 quotations
+- Lint passes with zero errors
+
+Stage Summary:
+- Full serial key activation system with device fingerprinting
+- Demo login with view-only access (amber banner in app shell)
+- Owner Module with 5 complete tabs for business management
+- Professional letter-size invoice/quotation print view
+- 7 new API routes + 7 new database models
+- All systems operational and verified
+

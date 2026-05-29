@@ -6,6 +6,7 @@ export type AppModule =
   | 'communication' | 'ai' | 'settings'
   | 'library' | 'transport' | 'hostel' | 'alumni' | 'hr' | 'inventory' 
   | 'lms' | 'admission' | 'placement' | 'scholarship' | 'health' | 'lab'
+  | 'owner'
 
 export interface User {
   id: string
@@ -15,6 +16,8 @@ export interface User {
   schoolId: string
   schoolName: string
   avatar?: string
+  isDemo?: boolean
+  isViewOnly?: boolean
 }
 
 interface AppState {
@@ -27,8 +30,12 @@ interface AppState {
   // Auth
   user: User | null
   isAuthenticated: boolean
+  isDemo: boolean
+  isViewOnly: boolean
+  isActivated: boolean
   login: (user: User) => void
   logout: () => void
+  setActivated: (v: boolean) => void
 
   // Sidebar
   sidebarOpen: boolean
@@ -50,8 +57,27 @@ export const useAppStore = create<AppState>((set) => ({
   // Auth
   user: null,
   isAuthenticated: false,
-  login: (user) => set({ user, isAuthenticated: true, view: 'app', module: 'dashboard' }),
-  logout: () => set({ user: null, isAuthenticated: false, view: 'landing', module: 'dashboard' }),
+  isDemo: false,
+  isViewOnly: false,
+  isActivated: false,
+  login: (user) => set({ 
+    user, 
+    isAuthenticated: true, 
+    view: 'app', 
+    module: 'dashboard',
+    isDemo: user.isDemo ?? false,
+    isViewOnly: user.isViewOnly ?? false,
+  }),
+  logout: () => set({ 
+    user: null, 
+    isAuthenticated: false, 
+    view: 'landing', 
+    module: 'dashboard',
+    isDemo: false,
+    isViewOnly: false,
+    isActivated: false,
+  }),
+  setActivated: (v) => set({ isActivated: v }),
 
   // Sidebar
   sidebarOpen: true,

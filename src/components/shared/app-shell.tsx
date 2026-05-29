@@ -44,6 +44,8 @@ import {
   Trophy,
   Stethoscope,
   Beaker,
+  Shield,
+  Lock,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -85,6 +87,7 @@ import { HostelModule } from '@/components/hostel/hostel-module'
 import { AlumniModule } from '@/components/alumni/alumni-module'
 import { HrModule } from '@/components/hr/hr-module'
 import { InventoryModule } from '@/components/inventory/inventory-module'
+import { OwnerModule } from '@/components/owner/owner-module'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface NavItem {
@@ -121,6 +124,10 @@ const operationsNavItems: NavItem[] = [
   { module: 'alumni', label: 'Alumni Network', icon: GraduationCap },
 ]
 
+const businessNavItems: NavItem[] = [
+  { module: 'owner', label: 'ERP Owner Hub', icon: Shield },
+]
+
 const intelligenceNavItems: NavItem[] = [
   { module: 'ai', label: 'AI Intelligence', icon: Brain },
   { module: 'settings', label: 'Settings', icon: Settings },
@@ -148,6 +155,7 @@ const moduleLabels: Record<AppModule, string> = {
   hr: 'HR & Payroll',
   inventory: 'Inventory & Assets',
   settings: 'Settings',
+  owner: 'ERP Owner Hub',
 }
 
 function ModuleContent({ module }: { module: AppModule }) {
@@ -173,6 +181,7 @@ function ModuleContent({ module }: { module: AppModule }) {
     case 'hr': return <HrModule />
     case 'inventory': return <InventoryModule />
     case 'settings': return <SettingsModule />
+    case 'owner': return <OwnerModule />
     default: return <DashboardModule />
   }
 }
@@ -274,6 +283,18 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Business */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-teal-600 dark:text-teal-400 px-2 mb-0.5 mt-1">
+            Business
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-0.5">
+              <NavSection items={businessNavItems} currentModule={module} onNavigate={setModule} />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* Intelligence */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 px-2 mb-0.5 mt-1">
@@ -368,13 +389,19 @@ function AppHeader() {
 }
 
 export function AppShell() {
-  const { module } = useAppStore()
+  const { module, isViewOnly } = useAppStore()
 
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="flex flex-col">
         <AppHeader />
+        {isViewOnly && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2">
+            <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Demo Mode — View Only Access</span>
+          </div>
+        )}
         <div className="flex-1 overflow-auto">
           <AnimatePresence mode="wait">
             <motion.div

@@ -1074,6 +1074,328 @@ async function main() {
 
   console.log('✅ Created 12 lab schedules')
 
+  // ============================================
+  // OWNER / LICENSING SEED DATA
+  // ============================================
+
+  // Find the existing demo school
+  const existingSchool = await prisma.school.findFirst({ where: { code: 'GIA-001' } })
+  if (!existingSchool) {
+    throw new Error('Demo school GIA-001 not found. Cannot seed owner/licensing data.')
+  }
+
+  // 1. Create Clients
+  const client1 = await prisma.client.create({
+    data: {
+      companyName: 'Greenfield Education Group',
+      contactPerson: 'Dr. Richard Green',
+      email: 'richard@greenfield.edu',
+      phone: '+1-555-0101',
+      city: 'Boston',
+      state: 'MA',
+      country: 'USA',
+      status: 'active',
+      taxId: 'TAX-GF-001',
+    },
+  })
+
+  const client2 = await prisma.client.create({
+    data: {
+      companyName: 'Pinnacle Academy Trust',
+      contactPerson: 'Sarah Mitchell',
+      email: 'sarah@pinnacleacademy.org',
+      phone: '+1-555-0202',
+      city: 'Chicago',
+      state: 'IL',
+      country: 'USA',
+      status: 'active',
+      taxId: 'TAX-PA-002',
+    },
+  })
+
+  const client3 = await prisma.client.create({
+    data: {
+      companyName: 'Horizon University Systems',
+      contactPerson: 'Prof. James Chen',
+      email: 'james@horizonuni.edu',
+      phone: '+1-555-0303',
+      city: 'San Francisco',
+      state: 'CA',
+      country: 'USA',
+      status: 'trial',
+      taxId: 'TAX-HU-003',
+    },
+  })
+
+  console.log('✅ Created 3 clients')
+
+  // 2. Create Serial Keys
+  const now = new Date()
+  const oneYearFromNow = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+  const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate())
+  const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+
+  const key1 = await prisma.serialKey.create({
+    data: {
+      key: 'EDUF-2024-XK9F-A7B2-C4D8',
+      clientId: client1.id,
+      schoolId: existingSchool.id,
+      plan: 'enterprise',
+      maxDevices: 10,
+      maxStudents: 2000,
+      status: 'activated',
+      activatedAt: now,
+      expiresAt: oneYearFromNow,
+    },
+  })
+
+  const key2 = await prisma.serialKey.create({
+    data: {
+      key: 'EDUF-2024-MN3P-Q5R6-S8T1',
+      clientId: client1.id,
+      plan: 'professional',
+      maxDevices: 5,
+      maxStudents: 1000,
+      status: 'available',
+    },
+  })
+
+  const key3 = await prisma.serialKey.create({
+    data: {
+      key: 'EDUF-2024-WY4Z-H2J6-K8L3',
+      clientId: client2.id,
+      plan: 'professional',
+      maxDevices: 5,
+      maxStudents: 800,
+      status: 'available',
+    },
+  })
+
+  const key4 = await prisma.serialKey.create({
+    data: {
+      key: 'EDUF-2024-UV7W-E9F3-G5H1',
+      clientId: client3.id,
+      plan: 'enterprise',
+      maxDevices: 15,
+      maxStudents: 5000,
+      status: 'available',
+    },
+  })
+
+  const key5 = await prisma.serialKey.create({
+    data: {
+      key: 'EDUF-2024-AB1C-D2E3-F4G5',
+      clientId: client1.id,
+      plan: 'starter',
+      maxDevices: 2,
+      maxStudents: 300,
+      status: 'expired',
+      activatedAt: twoYearsAgo,
+      expiresAt: oneYearAgo,
+    },
+  })
+
+  console.log('✅ Created 5 serial keys')
+
+  // 3. Update the existing demo school
+  await prisma.school.update({
+    where: { id: existingSchool.id },
+    data: {
+      clientId: client1.id,
+      activationStatus: 'active',
+    },
+  })
+
+  console.log('✅ Updated demo school with client and activation status')
+
+  // 4. Create Devices linked to serial key 1
+  await prisma.device.create({
+    data: {
+      fingerprint: 'fp-chrome-win-001',
+      deviceName: 'Admin Desktop',
+      browser: 'Chrome 120',
+      os: 'Windows 11',
+      status: 'active',
+      approved: true,
+      serialKeyId: key1.id,
+      clientId: client1.id,
+      schoolId: existingSchool.id,
+    },
+  })
+
+  await prisma.device.create({
+    data: {
+      fingerprint: 'fp-firefox-mac-002',
+      deviceName: 'Principal MacBook',
+      browser: 'Firefox 121',
+      os: 'macOS 14',
+      status: 'active',
+      approved: true,
+      serialKeyId: key1.id,
+      clientId: client1.id,
+      schoolId: existingSchool.id,
+    },
+  })
+
+  await prisma.device.create({
+    data: {
+      fingerprint: 'fp-safari-ios-003',
+      deviceName: 'Teacher iPad',
+      browser: 'Safari 17',
+      os: 'iOS 17',
+      status: 'pending',
+      approved: false,
+      serialKeyId: key1.id,
+      clientId: client1.id,
+      schoolId: existingSchool.id,
+    },
+  })
+
+  console.log('✅ Created 3 devices')
+
+  // 5. Create Invoices
+  const thirtyDaysFromNow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30)
+  const fifteenDaysFromNow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 15)
+  const fiveDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 5)
+
+  const invoice1 = await prisma.invoice.create({
+    data: {
+      invoiceNumber: 'INV-2024-001',
+      clientId: client1.id,
+      dueDate: thirtyDaysFromNow,
+      subtotal: 5998,
+      taxRate: 10,
+      taxAmount: 599.8,
+      total: 6597.8,
+      status: 'paid',
+      paidDate: fiveDaysAgo,
+    },
+  })
+
+  await prisma.invoiceItem.create({
+    data: {
+      invoiceId: invoice1.id,
+      description: 'EduFlow OS Enterprise License - Annual',
+      quantity: 1,
+      unitPrice: 4999,
+      total: 4999,
+    },
+  })
+
+  await prisma.invoiceItem.create({
+    data: {
+      invoiceId: invoice1.id,
+      description: 'Premium Support Package',
+      quantity: 1,
+      unitPrice: 999,
+      total: 999,
+    },
+  })
+
+  const invoice2 = await prisma.invoice.create({
+    data: {
+      invoiceNumber: 'INV-2024-002',
+      clientId: client2.id,
+      dueDate: fifteenDaysFromNow,
+      subtotal: 3498,
+      taxRate: 10,
+      taxAmount: 349.8,
+      total: 3847.8,
+      status: 'sent',
+    },
+  })
+
+  await prisma.invoiceItem.create({
+    data: {
+      invoiceId: invoice2.id,
+      description: 'EduFlow OS Professional License - Annual',
+      quantity: 1,
+      unitPrice: 2999,
+      total: 2999,
+    },
+  })
+
+  await prisma.invoiceItem.create({
+    data: {
+      invoiceId: invoice2.id,
+      description: 'Data Migration Service',
+      quantity: 1,
+      unitPrice: 499,
+      total: 499,
+    },
+  })
+
+  console.log('✅ Created 2 invoices with items')
+
+  // 6. Create Quotations
+  const quotation1 = await prisma.quotation.create({
+    data: {
+      quotationNumber: 'QUO-2024-001',
+      clientId: client3.id,
+      validUntil: thirtyDaysFromNow,
+      subtotal: 10495,
+      taxRate: 10,
+      taxAmount: 1049.5,
+      total: 11544.5,
+      status: 'sent',
+    },
+  })
+
+  await prisma.quotationItem.create({
+    data: {
+      quotationId: quotation1.id,
+      description: 'EduFlow OS Enterprise License - Annual',
+      quantity: 1,
+      unitPrice: 4999,
+      total: 4999,
+    },
+  })
+
+  await prisma.quotationItem.create({
+    data: {
+      quotationId: quotation1.id,
+      description: 'Multi-Campus Add-on',
+      quantity: 3,
+      unitPrice: 999,
+      total: 2997,
+    },
+  })
+
+  await prisma.quotationItem.create({
+    data: {
+      quotationId: quotation1.id,
+      description: 'Custom Integration Service',
+      quantity: 1,
+      unitPrice: 2499,
+      total: 2499,
+    },
+  })
+
+  const quotation2 = await prisma.quotation.create({
+    data: {
+      quotationNumber: 'QUO-2024-002',
+      clientId: client1.id,
+      validUntil: fifteenDaysFromNow,
+      subtotal: 998,
+      taxRate: 10,
+      taxAmount: 99.8,
+      total: 1097.8,
+      status: 'draft',
+    },
+  })
+
+  await prisma.quotationItem.create({
+    data: {
+      quotationId: quotation2.id,
+      description: 'Additional Device License Pack (5 devices)',
+      quantity: 2,
+      unitPrice: 499,
+      total: 998,
+    },
+  })
+
+  console.log('✅ Created 2 quotations with items')
+
   console.log('\n🎉 EduFlow OS database seeded successfully!')
   console.log('\n📋 Demo Login Credentials:')
   console.log('   Admin:    admin@greenfieldacademy.edu / admin123')

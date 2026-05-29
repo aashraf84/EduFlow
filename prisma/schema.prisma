@@ -12,46 +12,55 @@ datasource db {
 // ============================================
 
 model School {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique
-  address     String?
-  city        String?
-  state       String?
-  country     String?
-  phone       String?
-  email       String?
-  website     String?
-  logo        String?
-  plan        String   @default("starter")
-  status      String   @default("active")
-  maxStudents Int      @default(500)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  code            String   @unique
+  address         String?
+  city            String?
+  state           String?
+  country         String?
+  phone           String?
+  email           String?
+  website         String?
+  logo            String?
+  plan            String   @default("starter")
+  status          String   @default("active")
+  maxStudents     Int      @default(500)
+  institutionType String   @default("school")
+  clientId        String?
+  activationStatus String  @default("inactive")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  users          User[]
-  students       Student[]
-  teachers       Teacher[]
-  classes        Class[]
-  subjects       Subject[]
-  exams          Exam[]
-  feeStructures  FeeStructure[]
-  announcements  Announcement[]
-  sessions       AcademicSession[]
-  notifications  Notification[]
-  parents        Parent[]
-  libraryBooks   LibraryBook[]
+  client          Client?      @relation(fields: [clientId], references: [id])
+  serialKey       SerialKey?
+  devices         Device[]
+  users           User[]
+  students        Student[]
+  teachers        Teacher[]
+  classes         Class[]
+  subjects        Subject[]
+  exams           Exam[]
+  feeStructures   FeeStructure[]
+  announcements   Announcement[]
+  sessions        AcademicSession[]
+  notifications   Notification[]
+  parents         Parent[]
+  libraryBooks    LibraryBook[]
   transportRoutes TransportRoute[]
-  hostels        Hostel[]
-  alumni         Alumni[]
-  staffMembers   StaffMember[]
-  assets         Asset[]
-  courses        Course[]
-  admissions     Admission[]
-  placements     Placement[]
-  scholarships   Scholarship[]
-  healthRecords  HealthRecord[]
-  labs           Lab[]
+  hostels         Hostel[]
+  alumni          Alumni[]
+  staffMembers    StaffMember[]
+  assets          Asset[]
+  courses         Course[]
+  admissions      Admission[]
+  placements      Placement[]
+  scholarships    Scholarship[]
+  healthRecords   HealthRecord[]
+  labs            Lab[]
+
+  @@index([clientId])
+  @@index([activationStatus])
 }
 
 model AcademicSession {
@@ -960,4 +969,166 @@ model LabSchedule {
 
   @@index([labId])
   @@index([classId])
+}
+
+// ============================================
+// OWNER / ERP VENDOR SYSTEM
+// ============================================
+
+model Client {
+  id              String   @id @default(cuid())
+  companyName     String
+  contactPerson   String
+  email           String
+  phone           String?
+  address         String?
+  city            String?
+  state           String?
+  country         String?
+  website         String?
+  taxId           String?
+  logo            String?
+  status          String   @default("active")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  schools         School[]
+  serialKeys      SerialKey[]
+  devices         Device[]
+  invoices        Invoice[]
+  quotations      Quotation[]
+
+  @@index([status])
+  @@index([email])
+}
+
+model SerialKey {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  clientId      String
+  schoolId      String?  @unique
+  plan          String   @default("starter")
+  maxDevices    Int      @default(3)
+  maxStudents   Int      @default(500)
+  status        String   @default("available")
+  activatedAt   DateTime?
+  expiresAt     DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client        Client     @relation(fields: [clientId], references: [id])
+  school        School?    @relation(fields: [schoolId], references: [id])
+  devices       Device[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([key])
+}
+
+model Device {
+  id              String   @id @default(cuid())
+  clientId        String
+  serialKeyId     String
+  schoolId        String?
+  fingerprint     String
+  deviceName      String?
+  browser         String?
+  os              String?
+  ipAddress       String?
+  lastAccessedAt  DateTime @default(now())
+  status          String   @default("active")
+  approved        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          Client     @relation(fields: [clientId], references: [id])
+  serialKey       SerialKey  @relation(fields: [serialKeyId], references: [id])
+  school          School?    @relation(fields: [schoolId], references: [id])
+
+  @@unique([serialKeyId, fingerprint])
+  @@index([clientId])
+  @@index([serialKeyId])
+  @@index([fingerprint])
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  invoiceNumber   String   @unique
+  clientId        String
+  issueDate       DateTime @default(now())
+  dueDate         DateTime
+  subtotal        Float
+  taxRate         Float    @default(0)
+  taxAmount       Float    @default(0)
+  discount        Float    @default(0)
+  total           Float
+  status          String   @default("draft")
+  notes           String?
+  terms           String?
+  paidDate        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          Client        @relation(fields: [clientId], references: [id])
+  items           InvoiceItem[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([invoiceNumber])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Float
+  total       Float
+  createdAt   DateTime @default(now())
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model Quotation {
+  id              String   @id @default(cuid())
+  quotationNumber String   @unique
+  clientId        String
+  issueDate       DateTime @default(now())
+  validUntil      DateTime
+  subtotal        Float
+  taxRate         Float    @default(0)
+  taxAmount       Float    @default(0)
+  discount        Float    @default(0)
+  total           Float
+  status          String   @default("draft")
+  notes           String?
+  terms           String?
+  convertedToInvoice Boolean @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client          Client          @relation(fields: [clientId], references: [id])
+  items           QuotationItem[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([quotationNumber])
+}
+
+model QuotationItem {
+  id            String   @id @default(cuid())
+  quotationId   String
+  description   String
+  quantity      Int      @default(1)
+  unitPrice     Float
+  total         Float
+  createdAt     DateTime @default(now())
+
+  quotation     Quotation @relation(fields: [quotationId], references: [id])
+
+  @@index([quotationId])
 }
