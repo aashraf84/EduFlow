@@ -116,7 +116,7 @@ function StatCard({ title, value, icon: Icon, iconBg, iconColor, trend, trendLab
 // ── New Application Dialog ──
 function NewApplicationDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
   const queryClient = useQueryClient()
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const form = useForm<AdmissionFormValues>({
     resolver: zodResolver(admissionSchema),
     defaultValues: { applicantName: '', email: '', phone: '', appliedClass: '', previousSchool: '', gpa: '' },
@@ -124,7 +124,7 @@ function NewApplicationDialog({ open, onOpenChange, onSuccess }: { open: boolean
 
   const mutation = useMutation({
     mutationFn: async (data: AdmissionFormValues) => {
-      const res = await fetch('/api/admission', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId }) })
+      const res = await fetch('/api/admission', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId, schoolCode: tenantCode }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to submit application')
       return json
@@ -180,9 +180,10 @@ function StatusActionButton({ id, newStatus, label, icon: Icon, className, onSuc
   id: string; newStatus: string; label: string; icon: React.ElementType; className: string; onSuccess: () => void
 }) {
   const queryClient = useQueryClient()
+  const { tenantCode } = useAppStore()
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/admission', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: newStatus }) })
+      const res = await fetch('/api/admission', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: newStatus, schoolCode: tenantCode }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to update')
       return json
@@ -200,7 +201,7 @@ function StatusActionButton({ id, newStatus, label, icon: Icon, className, onSuc
 
 // ── Main Module ──
 export function AdmissionModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -208,7 +209,7 @@ export function AdmissionModule() {
   const [addOpen, setAddOpen] = useState(false)
   const limit = 10
 
-  const queryParams = new URLSearchParams({ schoolId, page: String(page), limit: String(limit) })
+  const queryParams = new URLSearchParams({ schoolId, schoolCode: tenantCode, page: String(page), limit: String(limit) })
   if (search) queryParams.set('search', search)
   if (statusFilter !== 'all') queryParams.set('status', statusFilter)
 

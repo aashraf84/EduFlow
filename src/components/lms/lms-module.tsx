@@ -146,12 +146,12 @@ function StatCard({ title, value, subtitle, icon: Icon, trend, trendLabel, iconB
 // ── Add Course Dialog ──
 function AddCourseDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
   const queryClient = useQueryClient()
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const form = useForm<CourseFormValues>({ resolver: zodResolver(courseSchema), defaultValues: { title: '', code: '', description: '', instructor: '', status: 'draft' } })
 
   const mutation = useMutation({
     mutationFn: async (data: CourseFormValues) => {
-      const res = await fetch('/api/lms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId }) })
+      const res = await fetch('/api/lms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId, schoolCode: tenantCode }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create course')
       return json
@@ -205,7 +205,7 @@ function AddCourseDialog({ open, onOpenChange, onSuccess }: { open: boolean; onO
 
 // ── Main Module ──
 export function LmsModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
   const [tab, setTab] = useState('courses')
   const [search, setSearch] = useState('')
@@ -214,7 +214,7 @@ export function LmsModule() {
   const [addOpen, setAddOpen] = useState(false)
   const limit = 10
 
-  const queryParams = new URLSearchParams({ schoolId, tab, page: String(page), limit: String(limit) })
+  const queryParams = new URLSearchParams({ schoolId, schoolCode: tenantCode, tab, page: String(page), limit: String(limit) })
   if (search) queryParams.set('search', search)
   if (statusFilter !== 'all') queryParams.set('status', statusFilter)
 

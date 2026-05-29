@@ -155,7 +155,7 @@ function StatCard({
 
 // ── Main Component ──────────────────────────────────────────────
 export function HostelModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const queryClient = useQueryClient()
   const schoolId = user?.schoolId || ''
 
@@ -182,6 +182,7 @@ export function HostelModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       const res = await fetch(`/api/hostel?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch hostel data')
       const json = await res.json()
@@ -195,7 +196,7 @@ export function HostelModule() {
       const res = await fetch('/api/hostel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed') }
       return res.json()
@@ -214,7 +215,7 @@ export function HostelModule() {
       const res = await fetch('/api/hostel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed') }
       return res.json()

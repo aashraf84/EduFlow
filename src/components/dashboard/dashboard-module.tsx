@@ -285,13 +285,13 @@ const ALERT_ICONS: Record<string, React.ElementType> = {
 
 // ── Main Component ──────────────────────────────────────────────
 export function DashboardModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
 
   const { data, isLoading, isError, error } = useQuery<DashboardData>({
     queryKey: ['dashboard', schoolId],
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard${schoolId ? `?schoolId=${schoolId}` : ''}`)
+      const res = await fetch(`/api/dashboard?schoolCode=${tenantCode}${schoolId ? `&schoolId=${schoolId}` : ''}`)
       if (!res.ok) throw new Error('Failed to fetch dashboard data')
       const json = await res.json()
       return json.data

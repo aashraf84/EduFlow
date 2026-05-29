@@ -118,7 +118,7 @@ function AddPlacementDialog({ open, onOpenChange, onSuccess, students }: {
   students: { id: string; firstName: string; lastName: string; admissionNo: string }[]
 }) {
   const queryClient = useQueryClient()
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const [studentSearch, setStudentSearch] = useState('')
   const form = useForm<PlacementFormValues>({
     resolver: zodResolver(placementSchema),
@@ -131,7 +131,7 @@ function AddPlacementDialog({ open, onOpenChange, onSuccess, students }: {
 
   const mutation = useMutation({
     mutationFn: async (data: PlacementFormValues) => {
-      const res = await fetch('/api/placement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId }) })
+      const res = await fetch('/api/placement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId, schoolCode: tenantCode }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to add placement')
       return json
@@ -199,7 +199,7 @@ function AddPlacementDialog({ open, onOpenChange, onSuccess, students }: {
 
 // ── Main Module ──
 export function PlacementModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -207,7 +207,7 @@ export function PlacementModule() {
   const [addOpen, setAddOpen] = useState(false)
   const limit = 10
 
-  const queryParams = new URLSearchParams({ schoolId, page: String(page), limit: String(limit) })
+  const queryParams = new URLSearchParams({ schoolId, schoolCode: tenantCode, page: String(page), limit: String(limit) })
   if (search) queryParams.set('search', search)
   if (typeFilter !== 'all') queryParams.set('type', typeFilter)
 
@@ -221,7 +221,7 @@ export function PlacementModule() {
   const { data: studentsData } = useQuery({
     queryKey: ['students-for-placement', schoolId],
     queryFn: async () => {
-      const res = await fetch(`/api/students?schoolId=${schoolId}&limit=100`)
+      const res = await fetch(`/api/students?schoolCode=${tenantCode}&schoolId=${schoolId}&limit=100`)
       if (!res.ok) throw new Error('Failed to fetch students')
       return res.json()
     },

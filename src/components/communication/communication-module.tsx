@@ -133,7 +133,7 @@ function AnnouncementSkeleton() {
 
 // ── Main Component ──────────────────────────────────────────────
 export function CommunicationModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const queryClient = useQueryClient()
   const schoolId = user?.schoolId || ''
   const userId = user?.id || ''
@@ -158,6 +158,7 @@ export function CommunicationModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       if (userId) params.set('userId', userId)
       const res = await fetch(`/api/communication?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch communication data')
@@ -173,7 +174,7 @@ export function CommunicationModule() {
       const res = await fetch('/api/communication', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -198,7 +199,7 @@ export function CommunicationModule() {
       const res = await fetch('/api/communication', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationId, read }),
+        body: JSON.stringify({ notificationId, read, schoolCode: tenantCode }),
       })
       if (!res.ok) throw new Error('Failed to update notification')
       return res.json()

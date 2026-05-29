@@ -248,7 +248,7 @@ function StatCard({
 
 // ── Main Component ──────────────────────────────────────────────
 export function FeesModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const queryClient = useQueryClient()
   const schoolId = user?.schoolId || ''
 
@@ -280,6 +280,7 @@ export function FeesModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       if (statusFilter) params.set('status', statusFilter)
       if (feeTypeFilter) params.set('feeType', feeTypeFilter)
       const res = await fetch(`/api/fees?${params.toString()}`)
@@ -294,7 +295,7 @@ export function FeesModule() {
   const { data: feeStructuresData } = useQuery<{ structures: FeeStructure[] }>({
     queryKey: ['fee-structures', schoolId],
     queryFn: async () => {
-      const res = await fetch(`/api/fees/structures${schoolId ? `?schoolId=${schoolId}` : ''}`)
+      const res = await fetch(`/api/fees/structures?schoolCode=${tenantCode}${schoolId ? `&schoolId=${schoolId}` : ''}`)
       if (!res.ok) return { structures: [] }
       const json = await res.json()
       return json.data || { structures: [] }
@@ -306,7 +307,7 @@ export function FeesModule() {
   const { data: studentsData } = useQuery({
     queryKey: ['students-quick', schoolId],
     queryFn: async () => {
-      const res = await fetch(`/api/students?schoolId=${schoolId}&limit=50`)
+      const res = await fetch(`/api/students?schoolCode=${tenantCode}&schoolId=${schoolId}&limit=50`)
       if (!res.ok) return { students: [] }
       const json = await res.json()
       return json.data
@@ -320,7 +321,7 @@ export function FeesModule() {
       const res = await fetch('/api/fees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -345,7 +346,7 @@ export function FeesModule() {
       const res = await fetch('/api/fees', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId, status: 'paid', paymentMode: pm || 'cash', paidDate: new Date().toISOString() }),
+        body: JSON.stringify({ paymentId, status: 'paid', paymentMode: pm || 'cash', paidDate: new Date().toISOString(), schoolCode: tenantCode }),
       })
       if (!res.ok) throw new Error('Failed to update payment')
       return res.json()

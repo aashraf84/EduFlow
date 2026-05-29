@@ -117,7 +117,7 @@ function StatCard({ title, value, icon: Icon, iconBg, iconColor, trend, trendLab
 // ── Add Lab Dialog ──
 function AddLabDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
   const queryClient = useQueryClient()
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const form = useForm<LabFormValues>({
     resolver: zodResolver(labSchema),
     defaultValues: { name: '', department: '', capacity: '30', equipment: '', incharge: '' },
@@ -125,7 +125,7 @@ function AddLabDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpen
 
   const mutation = useMutation({
     mutationFn: async (data: LabFormValues) => {
-      const res = await fetch('/api/lab', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId }) })
+      const res = await fetch('/api/lab', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId, schoolCode: tenantCode }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create lab')
       return json
@@ -226,7 +226,7 @@ function ScheduleGrid({ schedules }: { schedules: LabScheduleItem[] }) {
 
 // ── Main Module ──
 export function LabModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
   const [tab, setTab] = useState('labs')
   const [search, setSearch] = useState('')
@@ -234,7 +234,7 @@ export function LabModule() {
   const [addOpen, setAddOpen] = useState(false)
   const limit = 10
 
-  const queryParams = new URLSearchParams({ schoolId, tab, page: String(page), limit: String(limit) })
+  const queryParams = new URLSearchParams({ schoolId, schoolCode: tenantCode, tab, page: String(page), limit: String(limit) })
   if (search) queryParams.set('search', search)
 
   const { data, isLoading, isError, error, refetch } = useQuery({

@@ -118,7 +118,7 @@ function StatCard({ title, value, icon: Icon, iconBg, iconColor, trend, trendLab
 // ── Create Scholarship Dialog ──
 function CreateScholarshipDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOpenChange: (o: boolean) => void; onSuccess: () => void }) {
   const queryClient = useQueryClient()
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const form = useForm<ScholarshipFormValues>({
     resolver: zodResolver(scholarshipSchema),
     defaultValues: { name: '', description: '', amount: '', eligibility: '', deadline: '', type: 'merit' },
@@ -126,7 +126,7 @@ function CreateScholarshipDialog({ open, onOpenChange, onSuccess }: { open: bool
 
   const mutation = useMutation({
     mutationFn: async (data: ScholarshipFormValues) => {
-      const res = await fetch('/api/scholarship', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId }) })
+      const res = await fetch('/api/scholarship', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, schoolId: user?.schoolId, schoolCode: tenantCode }) })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create scholarship')
       return json
@@ -183,7 +183,7 @@ function CreateScholarshipDialog({ open, onOpenChange, onSuccess }: { open: bool
 
 // ── Main Module ──
 export function ScholarshipModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -192,7 +192,7 @@ export function ScholarshipModule() {
   const [addOpen, setAddOpen] = useState(false)
   const limit = 10
 
-  const queryParams = new URLSearchParams({ schoolId, page: String(page), limit: String(limit) })
+  const queryParams = new URLSearchParams({ schoolId, schoolCode: tenantCode, page: String(page), limit: String(limit) })
   if (search) queryParams.set('search', search)
   if (typeFilter !== 'all') queryParams.set('type', typeFilter)
   if (statusFilter !== 'all') queryParams.set('status', statusFilter)

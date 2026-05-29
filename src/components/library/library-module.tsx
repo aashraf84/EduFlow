@@ -143,7 +143,7 @@ function StatCard({
 
 // ── Main Component ──────────────────────────────────────────────
 export function LibraryModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const queryClient = useQueryClient()
   const schoolId = user?.schoolId || ''
 
@@ -166,6 +166,7 @@ export function LibraryModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       if (search) params.set('search', search)
       if (categoryFilter) params.set('category', categoryFilter)
       const res = await fetch(`/api/library?${params.toString()}`)
@@ -181,7 +182,7 @@ export function LibraryModule() {
       const res = await fetch('/api/library', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed') }
       return res.json()
@@ -200,7 +201,7 @@ export function LibraryModule() {
       const res = await fetch('/api/library', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'return', issueId }),
+        body: JSON.stringify({ action: 'return', issueId, schoolCode: tenantCode }),
       })
       if (!res.ok) throw new Error('Failed to return book')
       return res.json()

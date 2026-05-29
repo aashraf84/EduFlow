@@ -454,7 +454,7 @@ function generateReportCardData() {
 
 // ── Main Component ──────────────────────────────────────────────
 export function ExamsModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
   const queryClient = useQueryClient()
 
@@ -488,6 +488,7 @@ export function ExamsModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       if (selectedSubject && selectedSubject !== 'all') params.set('subjectId', selectedSubject)
       if (selectedTerm && selectedTerm !== 'all') params.set('termId', selectedTerm)
       params.set('limit', '50')
@@ -530,6 +531,7 @@ export function ExamsModule() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           schoolId,
+          schoolCode: tenantCode,
           ...formData,
           totalMarks: parseFloat(formData.totalMarks),
           passingMarks: parseFloat(formData.passingMarks),
@@ -568,7 +570,7 @@ export function ExamsModule() {
       const res = await fetch('/api/exams', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resultId, marksObtained, remarks }),
+        body: JSON.stringify({ resultId, marksObtained, remarks, schoolCode: tenantCode }),
       })
       if (!res.ok) throw new Error('Failed to update result')
       return res.json()

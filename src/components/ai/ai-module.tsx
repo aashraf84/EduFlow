@@ -185,7 +185,7 @@ function QuickActionCard({
 
 // ── Main Component ──────────────────────────────────────────────
 export function AiModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
 
   const [previousInsights, setPreviousInsights] = useState<InsightRecord[]>([])
@@ -196,7 +196,7 @@ export function AiModule() {
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery<DashboardData>({
     queryKey: ['dashboard', schoolId],
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard${schoolId ? `?schoolId=${schoolId}` : ''}`)
+      const res = await fetch(`/api/dashboard?schoolCode=${tenantCode}${schoolId ? `&schoolId=${schoolId}` : ''}`)
       if (!res.ok) throw new Error('Failed to fetch data')
       const json = await res.json()
       return json.data
@@ -210,7 +210,7 @@ export function AiModule() {
       const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, schoolId }),
+        body: JSON.stringify({ type, schoolId, schoolCode: tenantCode }),
       })
       if (!res.ok) {
         const err = await res.json()

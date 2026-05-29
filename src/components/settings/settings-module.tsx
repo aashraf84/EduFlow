@@ -156,7 +156,7 @@ const ROLE_BADGE: Record<string, string> = {
 
 // ── Main Component ──────────────────────────────────────────────
 export function SettingsModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const queryClient = useQueryClient()
   const schoolId = user?.schoolId || ''
 
@@ -190,7 +190,7 @@ export function SettingsModule() {
   const { data, isLoading, isError, error } = useQuery<SettingsData>({
     queryKey: ['settings', schoolId],
     queryFn: async () => {
-      const res = await fetch(`/api/settings${schoolId ? `?schoolId=${schoolId}` : ''}`)
+      const res = await fetch(`/api/settings?schoolCode=${tenantCode}${schoolId ? `&schoolId=${schoolId}` : ''}`)
       if (!res.ok) throw new Error('Failed to fetch settings')
       const json = await res.json()
       return json.data
@@ -204,7 +204,7 @@ export function SettingsModule() {
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) throw new Error('Failed to update school profile')
       return res.json()
@@ -225,7 +225,7 @@ export function SettingsModule() {
       const res = await fetch('/api/settings/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) throw new Error('Failed to create user')
       return res.json()

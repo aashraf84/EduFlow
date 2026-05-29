@@ -150,7 +150,7 @@ export async function createTenantDatabase(tenantCode: string): Promise<{
  * Push Prisma schema to a tenant database using a temporary PrismaClient
  */
 async function pushSchemaToTenant(databaseUrl: string): Promise<void> {
-  const { execSync } = require('child_process')
+  const { execSync } = await import('child_process')
   
   try {
     // Use Prisma CLI to push schema to the tenant database

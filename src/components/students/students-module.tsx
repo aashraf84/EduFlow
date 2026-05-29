@@ -626,7 +626,7 @@ function AddStudentDialog({
   onSuccess: () => void
 }) {
   const queryClient = useQueryClient()
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
 
   const form = useForm<AddStudentFormValues>({
     resolver: zodResolver(addStudentSchema),
@@ -652,7 +652,7 @@ function AddStudentDialog({
       const res = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, schoolId: user?.schoolId || '' }),
+        body: JSON.stringify({ ...data, schoolId: user?.schoolId || '', schoolCode: tenantCode }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create student')
@@ -885,7 +885,7 @@ type SortDir = 'asc' | 'desc'
 
 // ── Main Component ──────────────────────────────────────────────
 export function StudentsModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
 
   const [search, setSearch] = useState('')
@@ -904,6 +904,7 @@ export function StudentsModule() {
   // Build query params
   const queryParams = new URLSearchParams()
   if (schoolId) queryParams.set('schoolId', schoolId)
+  if (tenantCode) queryParams.set('schoolCode', tenantCode)
   if (search) queryParams.set('search', search)
   if (classFilter && classFilter !== 'all') queryParams.set('classId', classFilter)
   if (statusFilter && statusFilter !== 'all') queryParams.set('status', statusFilter)

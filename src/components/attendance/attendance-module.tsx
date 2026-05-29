@@ -415,7 +415,7 @@ function generateBehaviorLogs(): BehaviorLogEntry[] {
 
 // ── Main Component ──────────────────────────────────────────────
 export function AttendanceModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
   const queryClient = useQueryClient()
 
@@ -440,6 +440,7 @@ export function AttendanceModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       if (selectedDate) params.set('date', selectedDate)
       if (selectedClass && selectedClass !== 'all') params.set('classId', selectedClass)
       params.set('limit', '50')
@@ -455,7 +456,7 @@ export function AttendanceModule() {
   const { data: classesData } = useQuery<{ id: string; name: string }[]>({
     queryKey: ['classes', schoolId],
     queryFn: async () => {
-      const res = await fetch(`/api/students?schoolId=${schoolId}&limit=1`)
+      const res = await fetch(`/api/students?schoolCode=${tenantCode}&schoolId=${schoolId}&limit=1`)
       if (!res.ok) return []
       const json = await res.json()
       // Extract unique classes from students or use mock
@@ -482,6 +483,7 @@ export function AttendanceModule() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             schoolId,
+            schoolCode: tenantCode,
             studentId: record.studentId,
             date: selectedDate,
             status: record.status,

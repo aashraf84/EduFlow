@@ -163,7 +163,7 @@ function StatCard({
 
 // ── Main Component ──────────────────────────────────────────────
 export function HrModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const queryClient = useQueryClient()
   const schoolId = user?.schoolId || ''
 
@@ -202,6 +202,7 @@ export function HrModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       if (search) params.set('search', search)
       const res = await fetch(`/api/hr?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch HR data')
@@ -213,7 +214,7 @@ export function HrModule() {
 
   const addStaffMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const res = await fetch('/api/hr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const res = await fetch('/api/hr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, schoolCode: tenantCode }) })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed') }
       return res.json()
     },
@@ -223,7 +224,7 @@ export function HrModule() {
 
   const payrollMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const res = await fetch('/api/hr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const res = await fetch('/api/hr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, schoolCode: tenantCode }) })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed') }
       return res.json()
     },
@@ -233,7 +234,7 @@ export function HrModule() {
 
   const leaveMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const res = await fetch('/api/hr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const res = await fetch('/api/hr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, schoolCode: tenantCode }) })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed') }
       return res.json()
     },
@@ -243,7 +244,7 @@ export function HrModule() {
 
   const updateLeaveMutation = useMutation({
     mutationFn: async ({ leaveId, status }: { leaveId: string; status: string }) => {
-      const res = await fetch('/api/hr', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateLeave', leaveId, status }) })
+      const res = await fetch('/api/hr', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateLeave', leaveId, status, schoolCode: tenantCode }) })
       if (!res.ok) throw new Error('Failed to update leave')
       return res.json()
     },
@@ -253,7 +254,7 @@ export function HrModule() {
 
   const markPayrollPaidMutation = useMutation({
     mutationFn: async (payrollId: string) => {
-      const res = await fetch('/api/hr', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'markPayrollPaid', payrollId }) })
+      const res = await fetch('/api/hr', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'markPayrollPaid', payrollId, schoolCode: tenantCode }) })
       if (!res.ok) throw new Error('Failed to mark as paid')
       return res.json()
     },

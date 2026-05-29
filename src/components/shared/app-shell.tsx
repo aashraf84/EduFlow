@@ -223,7 +223,7 @@ function NavSection({ items, currentModule, onNavigate }: { items: NavItem[], cu
 }
 
 function AppSidebar() {
-  const { module, setModule, user, logout } = useAppStore()
+  const { module, setModule, user, logout, isOwner, tenantCode } = useAppStore()
   const userInitials = !user?.name ? 'U' : user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 
   return (
@@ -237,7 +237,7 @@ function AppSidebar() {
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-bold text-foreground">EduFlow OS</span>
-                <span className="truncate text-[10px] text-muted-foreground">Education Platform</span>
+                <span className="truncate text-[10px] text-muted-foreground">{isOwner ? 'Owner Platform' : tenantCode || 'Education Platform'}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -247,53 +247,69 @@ function AppSidebar() {
       <Separator className="mx-4 w-auto opacity-50" />
 
       <SidebarContent className="px-3 py-2 overflow-y-auto">
-        {/* Core Modules */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 px-2 mb-0.5">
-            Core
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
-              <NavSection items={coreNavItems} currentModule={module} onNavigate={setModule} />
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {isOwner ? (
+          /* Owner-only sidebar */
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-400 px-2 mb-0.5">
+              Owner
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                <NavSection items={businessNavItems} currentModule={module} onNavigate={setModule} />
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          <>
+            {/* Core Modules */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 px-2 mb-0.5">
+                Core
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  <NavSection items={coreNavItems} currentModule={module} onNavigate={setModule} />
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        {/* Academic Modules */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 px-2 mb-0.5 mt-1">
-            Academic
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
-              <NavSection items={academicNavItems} currentModule={module} onNavigate={setModule} />
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+            {/* Academic Modules */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 px-2 mb-0.5 mt-1">
+                Academic
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  <NavSection items={academicNavItems} currentModule={module} onNavigate={setModule} />
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        {/* Operations Modules */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 px-2 mb-0.5 mt-1">
-            Operations
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
-              <NavSection items={operationsNavItems} currentModule={module} onNavigate={setModule} />
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+            {/* Operations Modules */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 px-2 mb-0.5 mt-1">
+                Operations
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  <NavSection items={operationsNavItems} currentModule={module} onNavigate={setModule} />
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        {/* Business */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-teal-600 dark:text-teal-400 px-2 mb-0.5 mt-1">
-            Business
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
-              <NavSection items={businessNavItems} currentModule={module} onNavigate={setModule} />
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+            {/* Business */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-widest text-teal-600 dark:text-teal-400 px-2 mb-0.5 mt-1">
+                Business
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  <NavSection items={businessNavItems} currentModule={module} onNavigate={setModule} />
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
 
         {/* Intelligence */}
         <SidebarGroup>

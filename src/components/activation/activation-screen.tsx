@@ -79,13 +79,15 @@ export function ActivationScreen() {
         return
       }
 
+      const schoolInfo = data.data?.school
       login({
-        id: data.user?.id || 'activated-user',
-        name: data.user?.name || 'Admin User',
-        email: data.user?.email || 'admin@eduflow.io',
-        role: data.user?.role || 'admin',
-        schoolId: data.user?.schoolId || '',
-        schoolName: data.user?.schoolName || 'EduFlow School',
+        id: 'activated-user',
+        name: 'Admin User',
+        email: 'admin@eduflow.io',
+        role: 'admin',
+        schoolId: schoolInfo?.id || '',
+        schoolName: schoolInfo?.name || 'EduFlow School',
+        tenantCode: schoolCode || '',
       })
       setActivated(true)
     } catch {
@@ -105,6 +107,7 @@ export function ActivationScreen() {
       schoolName: 'Demo School',
       isDemo: true,
       isViewOnly: true,
+      tenantCode: schoolCode || 'GIA-001',
     })
     setActivated(true)
   }

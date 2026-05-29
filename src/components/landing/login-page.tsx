@@ -3,13 +3,14 @@
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { GraduationCap, Shield, Loader2 } from 'lucide-react'
+import { GraduationCap, Shield, Loader2, Building2, Key } from 'lucide-react'
 import { useState } from 'react'
 
 export function LoginPage() {
   const { setView, login, setActivated } = useAppStore()
-  const [email, setEmail] = useState('admin@eduflow.io')
-  const [password, setPassword] = useState('')
+  const [schoolCode, setSchoolCode] = useState('GIA-001')
+  const [email, setEmail] = useState('admin@greenfieldacademy.edu')
+  const [password, setPassword] = useState('admin123')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -22,7 +23,7 @@ export function LoginPage() {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email || 'admin@eduflow.io', password }),
+        body: JSON.stringify({ email, password, schoolCode }),
       })
 
       const data = await res.json()
@@ -32,24 +33,25 @@ export function LoginPage() {
         return
       }
 
-      const userData = data.data?.user || data.user
-      const schoolName = userData?.school?.name || userData?.schoolName || 'EduFlow School'
-      const activationStatus = userData?.school?.activationStatus || 'active'
+      const userData = data.data?.user
+      const tenantCode = data.data?.tenantCode || schoolCode
+      const isOwner = data.data?.isOwner || false
+      const isDemo = data.data?.isDemo || false
 
       login({
-        id: userData?.id || 'admin-user',
-        name: userData?.name || 'Admin User',
+        id: userData?.id || 'user',
+        name: userData?.name || 'User',
         email: userData?.email || email,
-        role: userData?.role || 'admin',
-        schoolId: userData?.schoolId || '',
-        schoolName,
+        role: isOwner ? 'owner' : (userData?.role || 'admin'),
+        schoolId: userData?.schoolId || userData?.school?.id || '',
+        schoolName: userData?.school?.name || 'EduFlow School',
+        isDemo,
+        isViewOnly: isDemo,
+        isOwner,
+        tenantCode,
       })
 
-      // Check if school is activated
-      if (activationStatus === 'active') {
-        setActivated(true)
-      }
-      // If not activated, isActivated stays false and activation screen will show
+      setActivated(true)
     } catch {
       setError('Network error. Please check your connection.')
     } finally {
@@ -57,18 +59,109 @@ export function LoginPage() {
     }
   }
 
-  const handleDemoLogin = () => {
-    login({
-      id: 'demo-user',
-      name: 'Demo User',
-      email: 'demo@eduflow.io',
-      role: 'viewer',
-      schoolId: 'demo-school',
-      schoolName: 'Demo School',
-      isDemo: true,
-      isViewOnly: true,
-    })
-    setActivated(true)
+  const handleDemoLogin = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'demo@greenfieldacademy.edu',
+          password: 'demo123',
+          schoolCode: 'GIA-001',
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        // Fallback to local demo if API fails
+        login({
+          id: 'demo-user',
+          name: 'Demo Viewer',
+          email: 'demo@greenfieldacademy.edu',
+          role: 'viewer',
+          schoolId: 'demo-school',
+          schoolName: 'Greenfield International Academy (Demo)',
+          isDemo: true,
+          isViewOnly: true,
+          tenantCode: 'GIA-001',
+        })
+        setActivated(true)
+        return
+      }
+
+      const userData = data.data?.user
+      login({
+        id: userData?.id || 'demo-user',
+        name: userData?.name || 'Demo Viewer',
+        email: userData?.email || 'demo@greenfieldacademy.edu',
+        role: userData?.role || 'viewer',
+        schoolId: userData?.schoolId || '',
+        schoolName: userData?.school?.name || 'Greenfield International Academy',
+        isDemo: true,
+        isViewOnly: true,
+        tenantCode: data.data?.tenantCode || 'GIA-001',
+      })
+      setActivated(true)
+    } catch {
+      // Fallback
+      login({
+        id: 'demo-user',
+        name: 'Demo Viewer',
+        email: 'demo@greenfieldacademy.edu',
+        role: 'viewer',
+        schoolId: 'demo-school',
+        schoolName: 'Greenfield International Academy (Demo)',
+        isDemo: true,
+        isViewOnly: true,
+        tenantCode: 'GIA-001',
+      })
+      setActivated(true)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleOwnerLogin = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'owner@eduflow.io',
+          password: 'owner123',
+          schoolCode: 'OWNER',
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Owner login failed.')
+        return
+      }
+
+      const userData = data.data?.user
+      login({
+        id: userData?.id || 'owner',
+        name: userData?.name || 'EduFlow Owner',
+        email: userData?.email || 'owner@eduflow.io',
+        role: 'owner',
+        schoolId: '',
+        schoolName: 'EduFlow OS Platform',
+        isOwner: true,
+        tenantCode: 'OWNER',
+      })
+      setActivated(true)
+    } catch {
+      setError('Network error. Please check your connection.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -88,6 +181,22 @@ export function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="schoolCode">
+              <div className="flex items-center gap-1.5">
+                <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                School Code
+              </div>
+            </label>
+            <Input
+              id="schoolCode"
+              type="text"
+              value={schoolCode}
+              onChange={(e) => setSchoolCode(e.target.value.toUpperCase())}
+              placeholder="e.g. GIA-001"
+              className="rounded-lg uppercase"
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-sm font-medium text-foreground" htmlFor="email">
               Email
             </label>
@@ -96,7 +205,7 @@ export function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@eduflow.io"
+              placeholder="admin@school.edu"
               className="rounded-lg"
             />
           </div>
@@ -149,13 +258,25 @@ export function LoginPage() {
           <Button
             variant="outline"
             onClick={handleDemoLogin}
+            disabled={isLoading}
             className="w-full rounded-lg h-10 border-dashed"
           >
             <Shield className="h-4 w-4 mr-2 text-amber-500" />
             Demo Login (View Only)
           </Button>
+
+          <Button
+            variant="outline"
+            onClick={handleOwnerLogin}
+            disabled={isLoading}
+            className="w-full rounded-lg h-10 border-dashed"
+          >
+            <Building2 className="h-4 w-4 mr-2 text-purple-500" />
+            Owner Login
+          </Button>
+
           <p className="text-center text-[11px] text-muted-foreground leading-relaxed">
-            Demo mode provides read-only access to explore the system
+            Demo mode provides read-only access · Owner login manages the platform
           </p>
         </div>
 

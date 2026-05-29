@@ -144,7 +144,7 @@ function StatCard({
 
 // ── Main Component ──────────────────────────────────────────────
 export function InventoryModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const queryClient = useQueryClient()
   const schoolId = user?.schoolId || ''
 
@@ -169,6 +169,7 @@ export function InventoryModule() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (schoolId) params.set('schoolId', schoolId)
+      if (tenantCode) params.set('schoolCode', tenantCode)
       if (search) params.set('search', search)
       if (categoryFilter && categoryFilter !== 'all') params.set('category', categoryFilter)
       const res = await fetch(`/api/inventory?${params.toString()}`)
@@ -184,7 +185,7 @@ export function InventoryModule() {
       const res = await fetch('/api/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, schoolCode: tenantCode }),
       })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed') }
       return res.json()

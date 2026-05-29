@@ -600,7 +600,7 @@ function AddTeacherDialog({
   onSuccess: () => void
 }) {
   const queryClient = useQueryClient()
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
 
   const form = useForm<AddTeacherFormValues>({
     resolver: zodResolver(addTeacherSchema),
@@ -622,7 +622,7 @@ function AddTeacherDialog({
       const res = await fetch('/api/teachers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, schoolId: user?.schoolId || '' }),
+        body: JSON.stringify({ ...data, schoolId: user?.schoolId || '', schoolCode: tenantCode }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create teacher')
@@ -856,7 +856,7 @@ type SortDir = 'asc' | 'desc'
 
 // ── Main Component ──────────────────────────────────────────────
 export function TeachersModule() {
-  const { user } = useAppStore()
+  const { user, tenantCode } = useAppStore()
   const schoolId = user?.schoolId || ''
 
   const [search, setSearch] = useState('')
@@ -874,6 +874,7 @@ export function TeachersModule() {
   // Build query params
   const queryParams = new URLSearchParams()
   if (schoolId) queryParams.set('schoolId', schoolId)
+  if (tenantCode) queryParams.set('schoolCode', tenantCode)
   if (search) queryParams.set('search', search)
   if (statusFilter && statusFilter !== 'all') queryParams.set('status', statusFilter)
   if (specializationFilter && specializationFilter !== 'all') queryParams.set('specialization', specializationFilter)
