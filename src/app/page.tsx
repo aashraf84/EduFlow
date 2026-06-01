@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, lazy, Suspense, useCallback } from 'react'
+import { useState, useEffect, lazy, Suspense, useCallback, ComponentType } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useERPStore, type ModuleKey, type AuthUser } from '@/store/erp-store'
 import { cn } from '@/lib/utils'
@@ -566,8 +566,8 @@ export default function Home() {
     )
   }
 
-  // Get user initials for avatar
-  const userInitials = user.avatar || user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  // Get user initials for avatar (with null safety)
+  const userInitials = user?.avatar || (user?.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'
 
   return (
     <div className={cn('min-h-screen bg-background flex relative overflow-hidden', user.role === 'viewer' && 'view-only-mode')}>

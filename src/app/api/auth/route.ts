@@ -58,17 +58,36 @@ export async function POST(request: NextRequest) {
       });
 
       const { password: _, ...ownerWithoutPassword } = owner;
+      const token = `owner_token_${owner.id}_${Date.now()}`;
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         data: {
           user: ownerWithoutPassword,
-          token: `owner_token_${owner.id}_${Date.now()}`,
+          token,
           tenantCode: 'OWNER',
           isDemo: false,
           isOwner: true,
         },
       });
+
+      // Set auth cookies for session persistence
+      response.cookies.set('eduflow_token', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: '/',
+      });
+      response.cookies.set('eduflow_tenant', 'OWNER', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7,
+        path: '/',
+      });
+
+      return response;
     }
 
     // ============================================
@@ -145,8 +164,9 @@ export async function POST(request: NextRequest) {
 
     // 6. Return user data with school info and tenant code
     const { password: _, ...userWithoutPassword } = user;
+    const token = `tenant_token_${user.id}_${Date.now()}`;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         user: {
@@ -162,12 +182,30 @@ export async function POST(request: NextRequest) {
               }
             : null,
         },
-        token: `demo_token_${user.id}_${Date.now()}`,
+        token,
         tenantCode: tenant.code,
         isDemo: user.isDemo,
         isOwner: user.role === 'admin',
       },
     });
+
+    // Set auth cookies for session persistence
+    response.cookies.set('eduflow_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+    });
+    response.cookies.set('eduflow_tenant', tenant.code, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('Auth error:', error);
     return NextResponse.json(
