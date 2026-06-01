@@ -32,15 +32,21 @@ export async function resolveTenantDb(request: NextRequest): Promise<{
   const tenantDb = await getTenantDbByCode(schoolCode)
   if (!tenantDb) return null
 
-  // Get tenant ID from master
-  const tenant = await masterDb.tenant.findUnique({
-    where: { code: schoolCode },
-    select: { id: true },
-  })
+  // Get tenant ID from master (with fallback)
+  let tenantId = `fallback_${schoolCode}`
+  try {
+    const tenant = await masterDb.tenant.findUnique({
+      where: { code: schoolCode },
+      select: { id: true },
+    })
+    if (tenant) tenantId = tenant.id
+  } catch {
+    // Master DB unreachable, use fallback ID
+  }
 
   return {
     db: tenantDb,
-    tenantId: tenant?.id || '',
+    tenantId,
     schoolCode,
   }
 }
@@ -70,7 +76,11 @@ export function successResponse(data: unknown, status: number = 200) {
  * Get tenant info from master database by school code
  */
 export async function getTenantInfo(schoolCode: string) {
-  return masterDb.tenant.findUnique({
-    where: { code: schoolCode },
-  })
+  try {
+    return await masterDb.tenant.findUnique({
+      where: { code: schoolCode },
+    })
+  } catch {
+    return null
+  }
 }

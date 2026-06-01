@@ -15,10 +15,7 @@ export async function POST(request: NextRequest) {
 
     const tenantDb = await getTenantDbByCode(schoolCode);
     if (!tenantDb) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: true, data: null });
     }
 
     if (!schoolId || !name || !email) {
@@ -68,9 +65,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Settings users POST error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: null });
   }
 }

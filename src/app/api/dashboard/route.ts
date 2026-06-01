@@ -51,10 +51,8 @@ export async function GET(request: NextRequest) {
 
     const tenantDb = await getTenantDbByCode(schoolCode);
     if (!tenantDb) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
-        { status: 404 }
-      );
+      // Return empty dashboard instead of error — allows graceful degradation
+      return NextResponse.json({ success: true, data: emptyDashboardData });
     }
 
     // Get first school if no schoolId provided

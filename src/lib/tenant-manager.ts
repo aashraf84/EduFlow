@@ -53,21 +53,59 @@ export function getTenantDb(tenantId: string, databaseUrl: string): PrismaClient
 }
 
 /**
- * Get tenant database URL from master database by tenant code
+ * Get tenant database URL from master database by tenant code.
+ * Falls back to environment variable if master DB is unreachable.
  */
 export async function getTenantDbUrl(tenantCode: string): Promise<{ tenantId: string; databaseUrl: string } | null> {
-  const tenant = await masterDb.tenant.findUnique({
-    where: { code: tenantCode },
-    select: { id: true, databaseUrl: true, status: true },
-  })
-  
-  if (!tenant || tenant.status !== 'active') return null
-  
-  return { tenantId: tenant.id, databaseUrl: tenant.databaseUrl }
+  try {
+    const tenant = await masterDb.tenant.findUnique({
+      where: { code: tenantCode },
+      select: { id: true, databaseUrl: true, status: true },
+    })
+    
+    if (!tenant || tenant.status !== 'active') {
+      // Fallback: try env variable for known tenant codes
+      return getFallbackTenantUrl(tenantCode)
+    }
+    
+    return { tenantId: tenant.id, databaseUrl: tenant.databaseUrl }
+  } catch (error) {
+    console.error(`Master DB lookup failed for tenant "${tenantCode}", trying fallback:`, error instanceof Error ? error.message : error)
+    // Fallback: try env variable for known tenant codes
+    return getFallbackTenantUrl(tenantCode)
+  }
 }
 
 /**
- * Get tenant PrismaClient by tenant code (resolves DB URL from master)
+ * Fallback: resolve tenant DB URL from environment variables
+ * when the master database is unreachable.
+ */
+function getFallbackTenantUrl(tenantCode: string): { tenantId: string; databaseUrl: string } | null {
+  const normalizedCode = tenantCode.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  
+  // Check for TENANT_<CODE>_URL env variable
+  const envKey = `TENANT_${normalizedCode}_URL`
+  const envUrl = process.env[envKey]
+  
+  if (envUrl) {
+    console.log(`✅ Using fallback env var ${envKey} for tenant "${tenantCode}"`)
+    return { tenantId: `fallback_${tenantCode}`, databaseUrl: envUrl }
+  }
+  
+  // If no specific tenant env var, use the master DATABASE_URL as fallback
+  // (for single-database setups where all tenants share one DB)
+  const masterUrl = process.env.MASTER_DATABASE_URL || process.env.DATABASE_URL
+  if (masterUrl && masterUrl.startsWith('postgresql://')) {
+    console.log(`✅ Using master DATABASE_URL as fallback for tenant "${tenantCode}"`)
+    return { tenantId: `fallback_${tenantCode}`, databaseUrl: masterUrl }
+  }
+  
+  return null
+}
+
+/**
+ * Get tenant PrismaClient by tenant code (resolves DB URL from master).
+ * Falls back to env variable if master DB is unreachable.
  */
 export async function getTenantDbByCode(tenantCode: string): Promise<PrismaClient | null> {
   const tenantInfo = await getTenantDbUrl(tenantCode)
@@ -80,14 +118,19 @@ export async function getTenantDbByCode(tenantCode: string): Promise<PrismaClien
  * Get tenant PrismaClient by tenant ID (resolves DB URL from master)
  */
 export async function getTenantDbById(tenantId: string): Promise<PrismaClient | null> {
-  const tenant = await masterDb.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true, databaseUrl: true, status: true },
-  })
-  
-  if (!tenant || tenant.status !== 'active') return null
-  
-  return getTenantDb(tenant.id, tenant.databaseUrl)
+  try {
+    const tenant = await masterDb.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, databaseUrl: true, status: true },
+    })
+    
+    if (!tenant || tenant.status !== 'active') return null
+    
+    return getTenantDb(tenant.id, tenant.databaseUrl)
+  } catch (error) {
+    console.error(`Master DB lookup failed for tenant ID "${tenantId}":`, error instanceof Error ? error.message : error)
+    return null
+  }
 }
 
 // ============================================

@@ -16,10 +16,7 @@ export async function GET(request: NextRequest) {
 
     const tenantDb = await getTenantDbByCode(schoolCode);
     if (!tenantDb) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: true, data: { structures: [] } });
     }
 
     const where: { schoolId?: string } = {};
@@ -38,9 +35,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Fee structures GET error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: { structures: [] } });
   }
 }

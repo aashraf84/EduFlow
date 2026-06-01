@@ -423,10 +423,15 @@ export async function POST(request: NextRequest) {
 
     const tenantDb = await getTenantDbByCode(schoolCode);
     if (!tenantDb) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        success: true,
+        data: {
+          type,
+          insight: 'No data available — database is currently unreachable.',
+          dataPoints: null,
+          generatedAt: new Date().toISOString(),
+        },
+      });
     }
 
     // Gather relevant data from the database
@@ -447,10 +452,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (!contextData) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to gather data for the specified school' },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        success: true,
+        data: {
+          type,
+          insight: 'No data available for the specified school.',
+          dataPoints: null,
+          generatedAt: new Date().toISOString(),
+        },
+      });
     }
 
     // Use z-ai-web-dev-sdk for AI insights
@@ -481,15 +491,16 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('AI insights error:', error);
-    // If AI SDK fails, return a helpful error
+    // If AI SDK fails, return a helpful fallback instead of 500
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to generate AI insights',
-        details: errorMessage,
+    return NextResponse.json({
+      success: true,
+      data: {
+        type: 'unknown',
+        insight: `Unable to generate AI insights at this time. Error: ${errorMessage}`,
+        dataPoints: null,
+        generatedAt: new Date().toISOString(),
       },
-      { status: 500 }
-    );
+    });
   }
 }

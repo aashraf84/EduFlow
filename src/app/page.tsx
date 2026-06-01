@@ -3,6 +3,7 @@
 import { useState, useEffect, lazy, Suspense, useCallback, ComponentType, Component } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useERPStore, type ModuleKey, type AuthUser } from '@/store/erp-store'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -550,6 +551,8 @@ function DesktopSidebar({ collapsed, activeModule, searchQuery, onNavClick, onSe
 
 function HomeInner() {
   const { activeModule, setActiveModule, copilotOpen, setCopilotOpen, selectedCampus, setSelectedCampus, user, isAuthenticated, isAuthLoading, setUser, setTenantCode, setSchoolId } = useERPStore()
+  const appStoreLogin = useAppStore(s => s.login)
+  const appStoreLogout = useAppStore(s => s.logout)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -580,7 +583,22 @@ function HomeInner() {
         if (!mounted) return
         try {
           if (data?.authenticated && data?.user) {
-            setUser(data.user)
+            const u = data.user
+            setUser(u)
+            // Sync to useAppStore so modules can read tenantCode/schoolId
+            useAppStore.getState().login({
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              role: u.role,
+              schoolId: u.schoolId || '',
+              schoolName: u.schoolName || '',
+              avatar: u.avatar || undefined,
+              isDemo: u.role === 'viewer' || u.role === 'demo',
+              isViewOnly: u.role === 'viewer' || u.role === 'demo',
+              isOwner: u.role === 'owner',
+              tenantCode: u.tenantCode,
+            })
           } else {
             setUser(null)
           }
@@ -614,16 +632,31 @@ function HomeInner() {
     setUser(_user)
     if (_user.tenantCode) setTenantCode(_user.tenantCode)
     if (_user.schoolId) setSchoolId(_user.schoolId)
+    // Sync to useAppStore so all modules can read tenantCode/schoolId
+    appStoreLogin({
+      id: _user.id,
+      name: _user.name,
+      email: _user.email,
+      role: _user.role,
+      schoolId: _user.schoolId || '',
+      schoolName: '',
+      avatar: _user.avatar || undefined,
+      isDemo: _user.role === 'viewer' || _user.role === 'demo',
+      isViewOnly: _user.role === 'viewer' || _user.role === 'demo',
+      isOwner: _user.role === 'owner',
+      tenantCode: _user.tenantCode,
+    })
     // Owner users should land on owner module
     if (_user.role === 'owner' || _user.tenantCode === 'OWNER') {
       setActiveModule('owner')
     }
-  }, [setUser, setTenantCode, setSchoolId, setActiveModule])
+  }, [setUser, setTenantCode, setSchoolId, setActiveModule, appStoreLogin])
 
   const handleLogout = useCallback(async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
     setUser(null)
-  }, [setUser])
+    appStoreLogout()
+  }, [setUser, appStoreLogout])
 
   const toggleTheme = useCallback(() => {
     setIsDark(!isDark)
