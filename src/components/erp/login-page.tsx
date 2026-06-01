@@ -365,8 +365,8 @@ export default function LoginPage({ onLogin, isSeeding }: LoginPageProps) {
             {/* Feature Grid */}
             <div className="grid grid-cols-2 gap-3 pt-2">
               {highlights.map((item) => (
-                <div key={item.title} className="flex items-start gap-2.5 bg-white/8 backdrop-blur-sm rounded-lg p-3 border border-white/8">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-white/12 shrink-0 mt-0.5">
+                <div key={item.title} className="flex items-start gap-2.5 bg-white/[0.08] backdrop-blur-sm rounded-lg p-3 border border-white/[0.08]">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-white/[0.12] shrink-0 mt-0.5">
                     <item.icon className="h-3.5 w-3.5 text-teal-200" />
                   </div>
                   <div>

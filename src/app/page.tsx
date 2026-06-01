@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, lazy, Suspense, useCallback, ComponentType } from 'react'
+import { useState, useEffect, lazy, Suspense, useCallback, ComponentType, Component } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useERPStore, type ModuleKey, type AuthUser } from '@/store/erp-store'
 import { cn } from '@/lib/utils'
@@ -36,31 +36,126 @@ import {
   MessageSquare, Brain, Settings, ChevronLeft, ChevronRight,
   Search, Bell, Moon, Sun, Menu, X, Sparkles, GraduationCap,
   Shield, LogOut, User, School, ChevronDown, Bot, Command,
-  PanelRightClose, CalendarDays, Package, BarChart3, Crown
+  PanelRightClose, CalendarDays, Package, BarChart3, Crown,
+  AlertCircle, RefreshCw
 } from 'lucide-react'
 
-// Lazy load all module components
-const Dashboard = lazy(() => import('@/components/erp/dashboard'))
-const Students = lazy(() => import('@/components/erp/students'))
-const Admissions = lazy(() => import('@/components/erp/admissions'))
-const Academics = lazy(() => import('@/components/erp/academics'))
-const Attendance = lazy(() => import('@/components/erp/attendance'))
-const Examinations = lazy(() => import('@/components/erp/examinations'))
-const Finance = lazy(() => import('@/components/erp/finance'))
-const HR = lazy(() => import('@/components/erp/hr'))
-const Transport = lazy(() => import('@/components/erp/transport'))
-const Library = lazy(() => import('@/components/erp/library'))
-const Hostel = lazy(() => import('@/components/erp/hostel'))
-const Communication = lazy(() => import('@/components/erp/communication'))
-const AICopilot = lazy(() => import('@/components/erp/ai-copilot'))
-const Portals = lazy(() => import('@/components/erp/portals'))
-const Calendar = lazy(() => import('@/components/erp/calendar'))
-const Discipline = lazy(() => import('@/components/erp/discipline'))
-const Inventory = lazy(() => import('@/components/erp/inventory'))
-const Reports = lazy(() => import('@/components/erp/reports'))
-const SettingsPage = lazy(() => import('@/components/erp/settings'))
-const OwnerModule = lazy(() => import('@/components/erp/owner-module'))
-const LoginPage = lazy(() => import('@/components/erp/login-page'))
+// ============================================
+// Error Boundary — catches client-side exceptions
+// ============================================
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('EduFlow client error:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center relative overflow-hidden">
+          <div className="flex flex-col items-center gap-6 max-w-md text-center px-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 shadow-lg shadow-rose-500/30 flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-white" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-foreground">Something went wrong</h2>
+              <p className="text-sm text-muted-foreground">
+                An unexpected error occurred. Please try refreshing the page.
+              </p>
+            </div>
+            {process.env.NODE_ENV === 'development' && this.state.error && (
+              <div className="w-full bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-lg p-3 text-left">
+                <p className="text-xs text-rose-600 dark:text-rose-400 font-mono break-all">
+                  {this.state.error.message}
+                </p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <Button
+                onClick={() => window.location.reload()}
+                className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white rounded-lg"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh Page
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  localStorage.clear()
+                  window.location.reload()
+                }}
+                className="rounded-lg"
+              >
+                Clear Data & Refresh
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// Safe lazy loader — catches dynamic import errors gracefully
+function safeLazy(loadFn: () => Promise<{ default: ComponentType }>) {
+  return lazy(() =>
+    loadFn().catch((err) => {
+      console.error('Module load error:', err)
+      // Return a fallback component instead of crashing
+      return {
+        default: function ModuleLoadError() {
+          return (
+            <div className="flex flex-col items-center justify-center h-96 gap-4">
+              <AlertCircle className="w-8 h-8 text-amber-500" />
+              <p className="text-sm text-muted-foreground">Failed to load module. Please refresh.</p>
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                <RefreshCw className="w-3 h-3 mr-1.5" />
+                Refresh
+              </Button>
+            </div>
+          )
+        },
+      }
+    })
+  )
+}
+
+// Lazy load all module components with safe error handling
+const Dashboard = safeLazy(() => import('@/components/erp/dashboard'))
+const Students = safeLazy(() => import('@/components/erp/students'))
+const Admissions = safeLazy(() => import('@/components/erp/admissions'))
+const Academics = safeLazy(() => import('@/components/erp/academics'))
+const Attendance = safeLazy(() => import('@/components/erp/attendance'))
+const Examinations = safeLazy(() => import('@/components/erp/examinations'))
+const Finance = safeLazy(() => import('@/components/erp/finance'))
+const HR = safeLazy(() => import('@/components/erp/hr'))
+const Transport = safeLazy(() => import('@/components/erp/transport'))
+const Library = safeLazy(() => import('@/components/erp/library'))
+const Hostel = safeLazy(() => import('@/components/erp/hostel'))
+const Communication = safeLazy(() => import('@/components/erp/communication'))
+const AICopilot = safeLazy(() => import('@/components/erp/ai-copilot'))
+const Portals = safeLazy(() => import('@/components/erp/portals'))
+const Calendar = safeLazy(() => import('@/components/erp/calendar'))
+const Discipline = safeLazy(() => import('@/components/erp/discipline'))
+const Inventory = safeLazy(() => import('@/components/erp/inventory'))
+const Reports = safeLazy(() => import('@/components/erp/reports'))
+const SettingsPage = safeLazy(() => import('@/components/erp/settings'))
+const OwnerModule = safeLazy(() => import('@/components/erp/owner-module'))
+const LoginPage = safeLazy(() => import('@/components/erp/login-page'))
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: Dashboard,
@@ -451,7 +546,7 @@ function DesktopSidebar({ collapsed, activeModule, searchQuery, onNavClick, onSe
   )
 }
 
-export default function Home() {
+function HomeInner() {
   const { activeModule, setActiveModule, copilotOpen, setCopilotOpen, selectedCampus, setSelectedCampus, user, isAuthenticated, isAuthLoading, setUser, setTenantCode, setSchoolId } = useERPStore()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -1070,5 +1165,13 @@ export default function Home() {
         </main>
       </div>
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <ErrorBoundary>
+      <HomeInner />
+    </ErrorBoundary>
   )
 }
