@@ -30,6 +30,8 @@ export interface AuthUser {
   name: string
   role: string
   avatar?: string | null
+  tenantCode?: string
+  schoolId?: string
 }
 
 export interface ReportSettings {
@@ -77,6 +79,11 @@ interface ERPState {
   setUser: (user: AuthUser | null) => void
   setAuthLoading: (loading: boolean) => void
   isViewer: () => boolean
+  // Tenant state
+  tenantCode: string
+  schoolId: string
+  setTenantCode: (code: string) => void
+  setSchoolId: (id: string) => void
   // Report settings
   reportSettings: ReportSettings
   setReportSettings: (settings: Partial<ReportSettings>) => void
@@ -124,12 +131,23 @@ export const useERPStore = create<ERPState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isAuthLoading: true,
-  setUser: (user) => set({ user, isAuthenticated: !!user, isAuthLoading: false }),
+  setUser: (user) => set({
+    user,
+    isAuthenticated: !!user,
+    isAuthLoading: false,
+    tenantCode: user?.tenantCode || get().tenantCode,
+    schoolId: user?.schoolId || get().schoolId,
+  }),
   setAuthLoading: (loading) => set({ isAuthLoading: loading }),
   isViewer: () => {
     const state = get()
     return state.user?.role === 'viewer' || state.user?.role === 'demo'
   },
+  // Tenant
+  tenantCode: '',
+  schoolId: '',
+  setTenantCode: (code) => set({ tenantCode: code }),
+  setSchoolId: (id) => set({ schoolId: id }),
   // Report settings
   reportSettings: defaultReportSettings,
   setReportSettings: (settings) => set((state) => ({

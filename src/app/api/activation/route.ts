@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { masterDb, getTenantDbByCode } from '@/lib/tenant-manager';
 
+const masterDbUrl = process.env.MASTER_DATABASE_URL || process.env.DATABASE_URL!
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
           data: {
             name: 'EduFlow Platform Owner',
             code: 'OWNER',
-            databaseUrl: process.env.DATABASE_URL!,
+            databaseUrl: masterDbUrl,
             databaseName: 'owner',
             status: 'active',
             plan: 'enterprise',

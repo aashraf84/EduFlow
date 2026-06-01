@@ -7,11 +7,24 @@ export async function GET(request: NextRequest) {
     const schoolCode = searchParams.get('schoolCode');
     const schoolId = searchParams.get('schoolId');
 
-    if (!schoolCode) {
-      return NextResponse.json(
-        { success: false, error: 'schoolCode is required' },
-        { status: 400 }
-      );
+    // Handle OWNER or missing schoolCode gracefully — return empty dashboard
+    if (!schoolCode || schoolCode.toUpperCase() === 'OWNER') {
+      return NextResponse.json({
+        success: true,
+        data: {
+          overview: { totalStudents: 0, totalTeachers: 0, totalClasses: 0, totalSubjects: 0, attendanceRate: 0 },
+          attendance: { today: { present: 0, absent: 0, late: 0, excused: 0, total: 0 }, rate: 0 },
+          fees: { collected: 0, pending: 0, total: 0, breakdown: { paid: 0, pending: 0, overdue: 0, partial: 0 }, collectionRate: 0 },
+          genderDistribution: [],
+          riskLevelDistribution: [],
+          recentAnnouncements: [],
+          performanceTrend: [],
+          alerts: [],
+          lowAttendanceStudents: [],
+          unpaidFees: [],
+          weakStudents: [],
+        },
+      });
     }
 
     const tenantDb = await getTenantDbByCode(schoolCode);

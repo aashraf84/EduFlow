@@ -46,8 +46,9 @@ import {
   AlertCircle,
   Info,
   Zap,
+  Crown,
 } from 'lucide-react'
-import { useAppStore } from '@/lib/store'
+import { useERPStore } from '@/store/erp-store'
 import { motion } from 'framer-motion'
 
 // ── Color palette ───────────────────────────────────────────────
@@ -283,20 +284,40 @@ const ALERT_ICONS: Record<string, React.ElementType> = {
   ai: Brain,
 }
 
+// ── Empty dashboard data for owner / no-tenant ──
+const emptyDashboardData: DashboardData = {
+  overview: { totalStudents: 0, totalTeachers: 0, totalClasses: 0, totalSubjects: 0, attendanceRate: 0 },
+  attendance: { today: { present: 0, absent: 0, late: 0, excused: 0, total: 0 }, rate: 0 },
+  fees: { collected: 0, pending: 0, total: 0, breakdown: { paid: 0, pending: 0, overdue: 0, partial: 0 }, collectionRate: 0 },
+  genderDistribution: [],
+  riskLevelDistribution: [],
+  recentAnnouncements: [],
+  performanceTrend: [],
+  alerts: [],
+  lowAttendanceStudents: [],
+  unpaidFees: [],
+  weakStudents: [],
+}
+
 // ── Main Component ──────────────────────────────────────────────
 export function DashboardModule() {
-  const { user, tenantCode } = useAppStore()
-  const schoolId = user?.schoolId || ''
+  const { user, tenantCode, schoolId } = useERPStore()
+  const isOwner = user?.role === 'owner' || tenantCode === 'OWNER'
 
   const { data, isLoading, isError, error } = useQuery<DashboardData>({
-    queryKey: ['dashboard', schoolId],
+    queryKey: ['dashboard', schoolId, tenantCode],
     queryFn: async () => {
+      // Owner users don't have school-level dashboard data
+      if (!tenantCode || tenantCode === 'OWNER') {
+        return emptyDashboardData
+      }
       const res = await fetch(`/api/dashboard?schoolCode=${tenantCode}${schoolId ? `&schoolId=${schoolId}` : ''}`)
       if (!res.ok) throw new Error('Failed to fetch dashboard data')
       const json = await res.json()
       return json.data
     },
     staleTime: 30_000,
+    enabled: !!tenantCode && tenantCode !== 'OWNER',
   })
 
   // ── Derived chart data with fallbacks ──
@@ -375,6 +396,24 @@ export function DashboardModule() {
     }
     return result
   })()
+
+  // ── Owner redirect state ──
+  if (isOwner) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <div className="h-16 w-16 rounded-full bg-violet-50 dark:bg-violet-950/30 flex items-center justify-center">
+          <Crown className="h-8 w-8 text-violet-500" />
+        </div>
+        <h3 className="text-lg font-semibold">Owner Dashboard</h3>
+        <p className="text-sm text-muted-foreground max-w-md text-center">
+          School-level dashboard data is not available for owner accounts. Use the Owner Panel to manage tenants, licenses, and billing.
+        </p>
+        <Button variant="outline" onClick={() => useERPStore.getState().setActiveModule('owner')}>
+          Go to Owner Panel
+        </Button>
+      </div>
+    )
+  }
 
   // ── Loading state ──
   if (isLoading) {

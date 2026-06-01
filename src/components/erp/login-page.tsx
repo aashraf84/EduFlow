@@ -236,6 +236,8 @@ export default function LoginPage({ onLogin, isSeeding }: LoginPageProps) {
         name: userData?.name || 'User',
         role: isOwner ? 'owner' : (userData?.role || 'admin'),
         avatar: userData?.avatar || null,
+        tenantCode,
+        schoolId: userData?.school?.id || '',
       })
     } catch {
       setLoginError('Network error. Please check your connection.')
@@ -271,17 +273,22 @@ export default function LoginPage({ onLogin, isSeeding }: LoginPageProps) {
           name: 'Demo Viewer',
           role: 'viewer',
           avatar: null,
+          tenantCode: 'GIA-001',
+          schoolId: '',
         })
         return
       }
 
       const userData = data.data?.user
+      const tenantCode = data.data?.tenantCode || 'GIA-001'
       onLogin({
         id: userData?.id || 'demo-user',
         email: userData?.email || 'demo@greenfieldacademy.edu',
         name: userData?.name || 'Demo Viewer',
         role: 'viewer',
         avatar: userData?.avatar || null,
+        tenantCode,
+        schoolId: userData?.school?.id || '',
       })
     } catch {
       onLogin({
@@ -290,6 +297,8 @@ export default function LoginPage({ onLogin, isSeeding }: LoginPageProps) {
         name: 'Demo Viewer',
         role: 'viewer',
         avatar: null,
+        tenantCode: 'GIA-001',
+        schoolId: '',
       })
     } finally {
       setIsLoggingIn(false)

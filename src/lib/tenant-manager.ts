@@ -5,7 +5,9 @@ import { Pool } from 'pg'
 // MASTER DATABASE CLIENT
 // ============================================
 
-const masterDbUrl = process.env.DATABASE_URL!
+// Use MASTER_DATABASE_URL if available (avoids conflict with system DATABASE_URL),
+// otherwise fall back to DATABASE_URL. Filter out SQLite URLs.
+const masterDbUrl = process.env.MASTER_DATABASE_URL || (process.env.DATABASE_URL?.startsWith('postgresql://') ? process.env.DATABASE_URL : undefined) || process.env.DATABASE_URL!
 
 const globalForPrisma = globalThis as unknown as {
   masterPrisma: PrismaClient | undefined

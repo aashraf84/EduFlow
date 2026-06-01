@@ -452,7 +452,7 @@ function DesktopSidebar({ collapsed, activeModule, searchQuery, onNavClick, onSe
 }
 
 export default function Home() {
-  const { activeModule, setActiveModule, copilotOpen, setCopilotOpen, selectedCampus, setSelectedCampus, user, isAuthenticated, isAuthLoading, setUser } = useERPStore()
+  const { activeModule, setActiveModule, copilotOpen, setCopilotOpen, selectedCampus, setSelectedCampus, user, isAuthenticated, isAuthLoading, setUser, setTenantCode, setSchoolId } = useERPStore()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -499,7 +499,13 @@ export default function Home() {
 
   const handleLogin = useCallback((_user: AuthUser) => {
     setUser(_user)
-  }, [setUser])
+    if (_user.tenantCode) setTenantCode(_user.tenantCode)
+    if (_user.schoolId) setSchoolId(_user.schoolId)
+    // Owner users should land on owner module
+    if (_user.role === 'owner' || _user.tenantCode === 'OWNER') {
+      setActiveModule('owner')
+    }
+  }, [setUser, setTenantCode, setSchoolId, setActiveModule])
 
   const handleLogout = useCallback(async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
