@@ -449,3 +449,45 @@ Stage Summary:
 - Successfully tested locally: all API endpoints return 200
 - Pushed all fixes to GitHub (commit 34c544e)
 - Vercel should auto-deploy from this push
+
+---
+Task ID: 6
+Agent: Main
+Task: Fix client-side exception on EduFlow Vercel deployment (eduflowerp.vercel.app)
+
+Work Log:
+- Diagnosed root causes of "Application error: a client-side exception has occurred":
+  1. Missing `postinstall` script — Prisma client wasn't generated during Vercel build
+  2. No error boundary — unhandled client errors crashed the entire app with generic Next.js error page
+  3. Unsafe lazy loading — module import failures crashed the app instead of showing fallback
+  4. Invalid Tailwind CSS classes — `bg-white/8` and `bg-white/12` may not parse correctly in all Tailwind v4 builds
+- Added `postinstall: "prisma generate"` to package.json for Vercel build compatibility
+- Added `ErrorBoundary` class component to page.tsx that catches client-side exceptions and renders a user-friendly error page with:
+  - Refresh Page button
+  - Clear Data & Refresh button (clears localStorage)
+  - Error details in development mode
+- Added `safeLazy()` wrapper function for all 21 lazy-loaded module components that catches dynamic import errors and renders a fallback component instead of crashing
+- Fixed Tailwind CSS opacity syntax: `bg-white/8` → `bg-white/[0.08]`, `bg-white/12` → `bg-white/[0.12]`
+- Renamed main export to `HomeInner` and wrapped with `ErrorBoundary` in new `Home` default export
+- Verified all API endpoints work correctly:
+  - GET / → 200 (23,605 bytes)
+  - GET /api/auth/session → `{"authenticated":false}` (200)
+  - POST /api/seed → `{"success":true,"message":"Seed completed successfully"}` (200)
+  - POST /api/activation (EF-OWNR-2025-0001) → `{"success":true,"data":{"activated":true,...}}` (200)
+  - POST /api/auth (admin@eduflow.cloud) → `{"success":true,"data":{"isOwner":true,...}}` (200)
+  - POST /api/auth (demo@greenfieldacademy.edu) → `{"success":true,"data":{"isDemo":true,...}}` (200)
+- Prisma schema is in sync with Neon PostgreSQL (eduflow_gia_001 database)
+- Ran `bun run lint` — passes clean (0 errors, 0 warnings)
+- Pushed all fixes to GitHub (commit 0175a5a)
+
+Stage Summary:
+- Client-side exception now handled gracefully with ErrorBoundary instead of showing generic Next.js error
+- Safe lazy loading prevents module import failures from crashing the app
+- Prisma client will be generated during Vercel build via postinstall script
+- Invalid Tailwind CSS classes fixed for consistent rendering
+- All API endpoints verified working with Neon PostgreSQL database
+- **IMPORTANT**: Vercel environment variables must be manually configured in the Vercel dashboard for the deployment to work:
+  - DATABASE_URL, MASTER_DATABASE_URL, DIRECT_DATABASE_URL, TENANT_GIA001_URL
+  - NEON_HOST, NEON_DIRECT_HOST, NEON_USER, NEON_PASSWORD, NEON_REGION
+  - All values are in /home/z/my-project/.env
+- Code pushed to GitHub: apexflowerp/EduFlow (commit 0175a5a)
