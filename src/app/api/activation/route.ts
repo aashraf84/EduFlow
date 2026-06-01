@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { masterDb, getTenantDbByCode } from '@/lib/tenant-manager';
 
-const masterDbUrl = process.env.MASTER_DATABASE_URL || process.env.DATABASE_URL!
+const masterDbUrl = process.env.MASTER_DATABASE_URL 
+  || (process.env.DATABASE_URL?.startsWith('postgresql://') ? process.env.DATABASE_URL : undefined) 
+  || ''
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { masterDb, getTenantDbByCode } from '@/lib/tenant-manager';
 
-const masterDbUrl = process.env.MASTER_DATABASE_URL || process.env.DATABASE_URL!
+// Use MASTER_DATABASE_URL preferentially (avoids SQLite override from system env)
+const masterDbUrl = process.env.MASTER_DATABASE_URL 
+  || (process.env.DATABASE_URL?.startsWith('postgresql://') ? process.env.DATABASE_URL : undefined) 
+  || ''
 
 // Derive the database name from the URL
 function getDatabaseName(url: string): string {

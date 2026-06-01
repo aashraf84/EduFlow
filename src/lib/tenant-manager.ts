@@ -5,9 +5,11 @@ import { Pool } from 'pg'
 // MASTER DATABASE CLIENT
 // ============================================
 
-// Use MASTER_DATABASE_URL if available (avoids conflict with system DATABASE_URL),
-// otherwise fall back to DATABASE_URL. Filter out SQLite URLs.
-const masterDbUrl = process.env.MASTER_DATABASE_URL || (process.env.DATABASE_URL?.startsWith('postgresql://') ? process.env.DATABASE_URL : undefined) || process.env.DATABASE_URL!
+// Always prefer MASTER_DATABASE_URL (from .env) over system DATABASE_URL (which may be SQLite in sandbox)
+// Filter out non-PostgreSQL URLs since our schema requires PostgreSQL
+const masterDbUrl = process.env.MASTER_DATABASE_URL 
+  || (process.env.DATABASE_URL?.startsWith('postgresql://') ? process.env.DATABASE_URL : undefined) 
+  || ''
 
 const globalForPrisma = globalThis as unknown as {
   masterPrisma: PrismaClient | undefined
@@ -16,7 +18,7 @@ const globalForPrisma = globalThis as unknown as {
 export const masterDb = globalForPrisma.masterPrisma ??
   new PrismaClient({
     datasourceUrl: masterDbUrl,
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log: ['error'],
   })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.masterPrisma = masterDb
@@ -36,7 +38,7 @@ export function getTenantDb(tenantId: string, databaseUrl: string): PrismaClient
   if (!tenantClients.has(cacheKey)) {
     const client = new PrismaClient({
       datasourceUrl: databaseUrl,
-      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      log: ['error'],
     })
     tenantClients.set(cacheKey, client)
     

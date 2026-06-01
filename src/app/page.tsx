@@ -40,6 +40,8 @@ import {
   AlertCircle, RefreshCw
 } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 // ============================================
 // Error Boundary — catches client-side exceptions
 // ============================================
@@ -555,6 +557,8 @@ function HomeInner() {
   const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
+    let mounted = true
+
     // Start in light mode by default
     document.documentElement.classList.remove('dark')
 
@@ -573,23 +577,37 @@ function HomeInner() {
         }
       })
       .then(data => {
-        if (data?.authenticated && data?.user) {
-          setUser(data.user)
-        } else {
-          setUser(null)
+        if (!mounted) return
+        try {
+          if (data?.authenticated && data?.user) {
+            setUser(data.user)
+          } else {
+            setUser(null)
+          }
+        } catch {
+          // Guard against any setState errors after unmount
         }
       })
-      .catch(() => setUser(null))
+      .catch(() => {
+        if (!mounted) return
+        try { setUser(null) } catch {}
+      })
 
     // Safety timeout: if session check takes too long, show login page anyway
     const timeout = setTimeout(() => {
-      const { isAuthLoading } = useERPStore.getState()
-      if (isAuthLoading) {
-        setUser(null)
-      }
+      if (!mounted) return
+      try {
+        const { isAuthLoading } = useERPStore.getState()
+        if (isAuthLoading) {
+          setUser(null)
+        }
+      } catch {}
     }, 8000)
 
-    return () => clearTimeout(timeout)
+    return () => {
+      mounted = false
+      clearTimeout(timeout)
+    }
   }, [setUser])
 
   const handleLogin = useCallback((_user: AuthUser) => {
@@ -612,7 +630,7 @@ function HomeInner() {
     document.documentElement.classList.toggle('dark')
   }, [isDark])
 
-  const ActiveComponent = moduleComponents[activeModule]
+  const ActiveComponent = moduleComponents[activeModule] || Dashboard
   const allNavItems = navGroups.flatMap(g => g.items)
 
   const filteredNavItems = searchQuery
@@ -665,7 +683,7 @@ function HomeInner() {
   const userInitials = user?.avatar || (user?.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'
 
   return (
-    <div className={cn('min-h-screen bg-background flex relative overflow-hidden', user.role === 'viewer' && 'view-only-mode')}>
+    <div className={cn('min-h-screen bg-background flex relative overflow-hidden', user?.role === 'viewer' && 'view-only-mode')}>
       {/* Tahoe Dynamic Background */}
       <div className="tahoe-bg" />
 
@@ -808,14 +826,14 @@ function HomeInner() {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-tahoe-caption text-foreground font-medium truncate">{user.name}</p>
-                  {user.role === 'viewer' && (
+                  <p className="text-tahoe-caption text-foreground font-medium truncate">{user?.name || 'User'}</p>
+                  {user?.role === 'viewer' && (
                     <Badge className="h-4 text-[9px] px-1.5 bg-violet-100 dark:bg-violet-400/15 text-violet-600 dark:text-violet-400 border-0 rounded-md font-semibold">
                       VIEW ONLY
                     </Badge>
                   )}
                 </div>
-                <p className="text-tahoe-micro text-muted-foreground dark:text-foreground/30">{user.email}</p>
+                <p className="text-tahoe-micro text-muted-foreground dark:text-foreground/30">{user?.email || ''}</p>
               </div>
             </div>
           </div>
@@ -829,7 +847,7 @@ function HomeInner() {
           {/* Left side */}
           <div className="flex items-center gap-3">
             {/* View Only Banner (for viewer role) */}
-            {user.role === 'viewer' && (
+            {user?.role === 'viewer' && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-100 dark:bg-violet-400/10 border border-violet-200/50 dark:border-violet-400/20">
                 <Shield className="w-3 h-3 text-violet-600 dark:text-violet-400" />
                 <span className="text-tahoe-micro text-violet-600 dark:text-violet-400 font-semibold">VIEW ONLY</span>
@@ -1003,14 +1021,14 @@ function HomeInner() {
                 <DropdownMenuLabel className="px-3 py-2">
                   <div className="flex flex-col">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-tahoe-caption text-foreground font-medium">{user.name}</span>
-                      {user.role === 'viewer' && (
+                      <span className="text-tahoe-caption text-foreground font-medium">{user?.name || 'User'}</span>
+                      {user?.role === 'viewer' && (
                         <Badge className="h-4 text-[9px] px-1.5 bg-violet-100 dark:bg-violet-400/15 text-violet-600 dark:text-violet-400 border-0 rounded-md font-semibold">
                           VIEW ONLY
                         </Badge>
                       )}
                     </div>
-                    <span className="text-tahoe-micro text-muted-foreground dark:text-foreground/30">{user.email}</span>
+                    <span className="text-tahoe-micro text-muted-foreground dark:text-foreground/30">{user?.email || ''}</span>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-foreground/[0.04]" />
