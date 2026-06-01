@@ -1,6 +1,12 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'crypto'
 
+// Override DATABASE_URL if the system one points to SQLite (sandbox env)
+// Use DIRECT_DATABASE_URL from .env for the Neon PostgreSQL connection
+if (process.env.DIRECT_DATABASE_URL && process.env.DIRECT_DATABASE_URL.startsWith('postgresql://')) {
+  process.env.DATABASE_URL = process.env.DIRECT_DATABASE_URL
+}
+
 const prisma = new PrismaClient()
 
 function simpleHash(password: string): string {
@@ -1396,8 +1402,83 @@ async function main() {
 
   console.log('✅ Created 2 quotations with items')
 
+  // ============================================
+  // OWNER / PLATFORM SEED DATA
+  // ============================================
+
+  // Create Owner User
+  const ownerUser = await prisma.ownerUser.create({
+    data: {
+      email: 'admin@eduflow.cloud',
+      password: simpleHash('Admin@180H'),
+      name: 'EduFlow Owner',
+      role: 'owner',
+      phone: '+1-555-0001',
+      status: 'active',
+    },
+  })
+
+  console.log('✅ Created owner user: admin@eduflow.cloud')
+
+  // Create Owner Client
+  const ownerClient = await prisma.client.create({
+    data: {
+      companyName: 'EduFlow Platform',
+      contactPerson: 'EduFlow Owner',
+      email: 'admin@eduflow.cloud',
+      phone: '+1-555-0001',
+      address: 'Platform Headquarters',
+      city: 'Lahore',
+      state: 'Punjab',
+      country: 'Pakistan',
+      website: 'eduflowerp.vercel.app',
+      status: 'active',
+      notes: 'Platform owner account',
+    },
+  })
+
+  console.log('✅ Created owner client')
+
+  // Create Owner Serial Key
+  const ownerSerialKey = await prisma.serialKey.create({
+    data: {
+      key: 'EF-OWNR-2025-0001',
+      clientId: ownerClient.id,
+      plan: 'enterprise',
+      maxDevices: 100,
+      maxStudents: 999999,
+      status: 'available',
+      notes: 'Owner master serial key',
+    },
+  })
+
+  console.log('✅ Created owner serial key: EF-OWNR-2025-0001')
+
+  // Create OWNER Tenant
+  const ownerTenant = await prisma.tenant.create({
+    data: {
+      name: 'EduFlow Platform Owner',
+      code: 'OWNER',
+      databaseUrl: process.env.DATABASE_URL!,
+      databaseName: 'owner',
+      status: 'active',
+      plan: 'enterprise',
+      maxStudents: 999999,
+      maxDevices: 100,
+    },
+  })
+
+  // Link owner client to tenant
+  await prisma.client.update({
+    where: { id: ownerClient.id },
+    data: { tenantId: ownerTenant.id },
+  })
+
+  console.log('✅ Created OWNER tenant')
+
   console.log('\n🎉 EduFlow OS database seeded successfully!')
   console.log('\n📋 Demo Login Credentials:')
+  console.log('   Owner:    admin@eduflow.cloud / Admin@180H (Serial: EF-OWNR-2025-0001)')
   console.log('   Admin:    admin@greenfieldacademy.edu / admin123')
   console.log('   Principal: principal@greenfieldacademy.edu / principal123')
   console.log('   Teacher:  emily.chen@greenfieldacademy.edu / teacher123')

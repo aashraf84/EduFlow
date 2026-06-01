@@ -55,7 +55,105 @@ export async function POST(request: NextRequest) {
     }
 
     // ============================================
-    // 2. Resolve tenant: use schoolCode if provided, otherwise derive from serial key
+    // 2. OWNER ACTIVATION PATH
+    //    Owner serial keys (EF-OWNR-*) use a special OWNER tenant
+    // ============================================
+    const isOwnerKey = serialKey.startsWith('EF-OWNR')
+
+    if (isOwnerKey) {
+      // Find or create the OWNER tenant
+      let ownerTenant = await masterDb.tenant.findUnique({
+        where: { code: 'OWNER' },
+      })
+
+      if (!ownerTenant) {
+        // Auto-create OWNER tenant
+        ownerTenant = await masterDb.tenant.create({
+          data: {
+            name: 'EduFlow Platform Owner',
+            code: 'OWNER',
+            databaseUrl: process.env.DATABASE_URL!,
+            databaseName: 'owner',
+            status: 'active',
+            plan: 'enterprise',
+            maxStudents: 999999,
+            maxDevices: 100,
+          },
+        })
+      }
+
+      // Check if device already exists for this serial key
+      const existingOwnerDevice = await masterDb.device.findUnique({
+        where: {
+          serialKeyId_fingerprint: {
+            serialKeyId: keyRecord.id,
+            fingerprint: deviceFingerprint,
+          },
+        },
+      })
+
+      let ownerDevice
+      if (existingOwnerDevice) {
+        ownerDevice = await masterDb.device.update({
+          where: { id: existingOwnerDevice.id },
+          data: { lastAccessedAt: new Date() },
+        })
+      } else {
+        ownerDevice = await masterDb.device.create({
+          data: {
+            clientId: keyRecord.clientId,
+            serialKeyId: keyRecord.id,
+            tenantId: ownerTenant.id,
+            fingerprint: deviceFingerprint,
+            deviceName,
+            browser,
+            os,
+            approved: true,
+            status: 'active',
+          },
+        })
+      }
+
+      // Update serial key
+      await masterDb.serialKey.update({
+        where: { id: keyRecord.id },
+        data: {
+          tenantId: ownerTenant.id,
+          status: 'activated',
+          activatedAt: keyRecord.activatedAt || new Date(),
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          activated: true,
+          tenant: {
+            id: ownerTenant.id,
+            name: ownerTenant.name,
+            code: ownerTenant.code,
+            plan: ownerTenant.plan,
+            status: ownerTenant.status,
+          },
+          school: null,
+          serialKey: {
+            id: keyRecord.id,
+            key: keyRecord.key,
+            plan: keyRecord.plan,
+            maxDevices: keyRecord.maxDevices,
+            maxStudents: keyRecord.maxStudents,
+          },
+          device: {
+            id: ownerDevice.id,
+            approved: true,
+            isNewDevice: !existingOwnerDevice,
+          },
+        },
+      })
+    }
+
+    // ============================================
+    // 3. Resolve tenant: use schoolCode if provided, otherwise derive from serial key
     // ============================================
     let tenant;
     if (schoolCode) {
