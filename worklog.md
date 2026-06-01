@@ -423,3 +423,29 @@ Stage Summary:
 - Both bugs fixed: serial key format preserved, dashboard API optimized with batch queries + timeout + partial data fallback
 - New database properly seeded with owner user, demo user, sample data
 - Lint passes clean
+
+---
+Task ID: 5
+Agent: Main
+Task: Fix application error on EduFlow ERP (Vercel deployment)
+
+Work Log:
+- Diagnosed root cause: `output: "standalone"` in next.config.ts incompatible with Vercel
+- Found missing CSS classes: tahoe-bg, glass-sidebar, glass-lens, etc. not defined in globals.css
+- Found null safety issue on user.name.split() in page.tsx line 570
+- Session API always returned `{authenticated: false}` - no token validation
+- Login API didn't set cookies, so sessions couldn't persist across page refreshes
+- Shell env var DATABASE_URL=sqlite was overriding .env file for Prisma CLI
+- channel_binding=require not supported by Prisma - removed from DATABASE_URL
+
+Stage Summary:
+- Removed `output: "standalone"` from next.config.ts (Vercel uses its own deployment format)
+- Added 100+ lines of Tahoe design system CSS classes to globals.css
+- Fixed session API to validate tokens from httpOnly cookies
+- Added cookie-based auth persistence on login/logout
+- Fixed null safety on user.name.split() with optional chaining
+- Updated .env with new Neon PostgreSQL URL (without channel_binding)
+- Confirmed database is in sync with Prisma schema
+- Successfully tested locally: all API endpoints return 200
+- Pushed all fixes to GitHub (commit 34c544e)
+- Vercel should auto-deploy from this push
