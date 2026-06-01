@@ -304,20 +304,36 @@ export function DashboardModule() {
   const { user, tenantCode, schoolId } = useERPStore()
   const isOwner = user?.role === 'owner' || tenantCode === 'OWNER'
 
-  const { data, isLoading, isError, error } = useQuery<DashboardData>({
+  const { data, isLoading, isError, error, refetch } = useQuery<DashboardData>({
     queryKey: ['dashboard', schoolId, tenantCode],
     queryFn: async () => {
       // Owner users don't have school-level dashboard data
       if (!tenantCode || tenantCode === 'OWNER') {
         return emptyDashboardData
       }
-      const res = await fetch(`/api/dashboard?schoolCode=${tenantCode}${schoolId ? `&schoolId=${schoolId}` : ''}`)
-      if (!res.ok) throw new Error('Failed to fetch dashboard data')
-      const json = await res.json()
-      return json.data
+      try {
+        const res = await fetch(`/api/dashboard?schoolCode=${tenantCode}${schoolId ? `&schoolId=${schoolId}` : ''}`)
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to fetch dashboard data')
+        }
+        const json = await res.json()
+        if (!json.success || !json.data) {
+          throw new Error('Invalid dashboard response')
+        }
+        return json.data
+      } catch (err) {
+        // If it's a network error, provide more context
+        if (err instanceof TypeError && err.message.includes('fetch')) {
+          throw new Error('Network error. Please check your connection.')
+        }
+        throw err
+      }
     },
     staleTime: 30_000,
     enabled: !!tenantCode && tenantCode !== 'OWNER',
+    retry: 2,
+    retryDelay: 2000,
   })
 
   // ── Derived chart data with fallbacks ──
@@ -448,7 +464,7 @@ export function DashboardModule() {
         <p className="text-sm text-muted-foreground max-w-md text-center">
           {(error as Error)?.message || 'Something went wrong. Please try again later.'}
         </p>
-        <Button variant="outline" onClick={() => window.location.reload()}>
+        <Button variant="outline" onClick={() => refetch()}>
           Retry
         </Button>
       </div>

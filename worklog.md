@@ -312,3 +312,114 @@ Stage Summary:
 - The dashboard API gracefully handles OWNER and empty schoolCode requests instead of returning errors.
 - Owner users are automatically redirected to the Owner Panel on login and see a friendly message if they navigate to the dashboard.
 - All changes maintain backward compatibility with existing functionality.
+
+---
+Task ID: 3
+Agent: Performance Fix Agent
+Task: Fix Dashboard API N+1 Query Performance Bug
+
+Work Log:
+- Read `/home/z/my-project/src/app/api/dashboard/route.ts` (432 lines) to identify N+1 query problems
+- Read Prisma schema to understand model relationships (Student, Attendance, ExamResult, FeePayment)
+- Read existing worklog.md to understand prior changes
+- Identified two critical N+1 query issues:
+
+  1. **Low Attendance Students (original lines 210-256)**:
+     - Line 214: `groupBy` to get total attendance per student (1 query)
+     - Line 226: For EACH student, `count` query for present days (N queries)
+     - Line 237: For EACH student below 75%, `findUnique` for student details (M queries)
+     - Total: 1 + N + M queries (with 100 students → 200+ queries)
+
+  2. **Weak Students (original lines 280-311)**:
+     - Line 281: `groupBy` with `having` to get avg marks per student (1 query)
+     - Line 292: For EACH student, `findUnique` for student details (N queries)
+     - Total: 1 + N queries (with 50 students → 50+ queries)
+
+- Performed complete rewrite of the dashboard API route with the following fixes:
+
+  **Fix 1: Low Attendance — Eliminated N+1 (3 queries instead of 1+N+M)**
+  - Two parallel `groupBy` queries: one for total records per student, one for present+late records per student
+  - Calculate percentages in JavaScript using Map lookups (O(1) per student)
+  - Batch-fetch student details with single `findMany` using `where: { id: { in: [...] } }`
+  - Sort by percentage ascending (worst first), take top 10, then merge with student details
+
+  **Fix 2: Weak Students — Eliminated N+1 (2 queries instead of 1+N)**
+  - Keep single `groupBy` with `having` to get avg marks per student (efficient DB-side filtering)
+  - Batch-fetch student details with single `findMany` using `where: { id: { in: [...] } }`
+  - Take top 10, then merge with student details via Map lookup
+
+  **Fix 3: Timeout Protection (10-second limit)**
+  - Added `withTimeout()` utility that wraps Promise.race with a timeout
+  - Dashboard data fetch is wrapped in `withTimeout(fetchDashboardData(), 10000, emptyDashboardData)`
+  - If total fetch exceeds 10 seconds, returns empty dashboard data instead of hanging/timing out
+
+  **Fix 4: Partial Data Error Handling**
+  - Added `safeQuery()` utility that catches individual query errors and returns fallback values
+  - Every query in the `Promise.all` is wrapped with `safeQuery(promise, fallback)`
+  - If one query fails (e.g., attendance table timeout), other queries still succeed
+  - Dashboard renders with partial data instead of "Failed to load dashboard" error
+  - Each failed query logs to console for debugging
+
+  **Fix 5: Same Response Shape Maintained**
+  - Verified response JSON structure is identical to original:
+    - `overview: { totalStudents, totalTeachers, totalClasses, totalSubjects, attendanceRate }`
+    - `attendance: { today: { present, absent, late, excused, total }, rate }`
+    - `fees: { collected, pending, total, breakdown: { paid, pending, overdue, partial }, collectionRate }`
+    - `genderDistribution`, `riskLevelDistribution`, `recentAnnouncements`, `performanceTrend`, `alerts`
+    - `lowAttendanceStudents: [{ id, firstName, lastName, admissionNo, class: { name }, attendancePercentage }]`
+    - `unpaidFees`, `weakStudents: [{ id, firstName, lastName, admissionNo, class: { name }, averageMarks }]`
+
+  **Refactoring for Readability**
+  - Extracted `fetchTodayAttendance()` helper function
+  - Extracted `fetchFeePayments()` helper function
+  - Extracted `fetchLowAttendance()` helper function with detailed doc comments
+  - Extracted `fetchWeakStudents()` helper function with detailed doc comments
+  - Extracted `fetchDashboardData()` as the main orchestrator function
+  - Moved `emptyDashboardData` constant to module level for reuse
+
+- Ran `bun run lint` — passes clean (0 errors, 0 warnings)
+- Ran `npx tsc --noEmit` — no TypeScript errors in dashboard route file
+- Dev server compiles successfully
+
+Stage Summary:
+- Eliminated N+1 query patterns in both low attendance and weak students sections
+- Query count reduced from O(N+M) to O(1) for both problem areas
+- Low attendance: 3 queries (was 1+N+M, ~200+ with 100 students)
+- Weak students: 2 queries (was 1+N, ~50+ with 50 students)
+- Added 10-second timeout protection returning empty dashboard instead of Vercel timeout
+- Added partial data error handling — single query failures no longer crash the entire dashboard
+- Response shape is 100% identical — no frontend changes needed
+- Lint passes clean, TypeScript compiles without errors
+
+---
+Task ID: 4
+Agent: Main
+Task: Fix registration error and dashboard loading failure, update database to eduflow_gia_001
+
+Work Log:
+- Updated `.env` to use new Neon PostgreSQL database `eduflow_gia_001` instead of `neondb`
+- Added `TENANT_GIA001_URL` env var for tenant-specific URL reference
+- Pushed Prisma schema to the new `eduflow_gia_001` database (already in sync)
+- Generated new Prisma Client for the updated database URL
+- Fixed critical serial key formatting bug in `login-page.tsx`: The `formatSerialKey` function was stripping dashes and re-adding them every 5 characters, turning `EF-OWNR-2025-0001` into `EFOWN-R2025-0001` which couldn't be found in the database. Changed to preserve natural dash positions.
+- Updated `seed/route.ts` with:
+  - `getDatabaseName()` helper to derive DB name from URL
+  - Auto-update stale tenant `databaseUrl` fields when env changes
+  - Added `demo@eduflow.cloud` / `Demo@2025` owner user for backward compatibility
+  - Added `EF-GIA1-2025-0001` serial key for GIA-001 tenant
+  - Added sample data seeding (50 students with proper User FK records, 10 classes, 8 subjects, attendance, fees, announcements)
+  - Fixed Student creation to include valid User records (was using fake userIds that violated FK constraints)
+- Updated `dashboard-module.tsx` with:
+  - Better error handling in useQuery (parses error messages, validates response shape)
+  - Added retry: 2 and retryDelay: 2000 for transient failures
+  - Changed Retry button to use `refetch()` instead of `window.location.reload()`
+- Dashboard API already fixed by previous agent (N+1 queries, timeout protection, partial data handling)
+- Ran `bun run lint` — passes clean
+
+Stage Summary:
+- Database migrated from `neondb` to `eduflow_gia_001` with all schema and data
+- **Root cause of "error on registration"**: Serial key formatter was mangling key format (EF-OWNR-2025-0001 → EFOWN-R2025-0001), making it impossible to find in DB
+- **Root cause of "Failed to load dashboard"**: N+1 queries causing 20+ second timeouts on Vercel, plus missing seed data in new DB
+- Both bugs fixed: serial key format preserved, dashboard API optimized with batch queries + timeout + partial data fallback
+- New database properly seeded with owner user, demo user, sample data
+- Lint passes clean

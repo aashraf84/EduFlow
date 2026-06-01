@@ -54,15 +54,11 @@ function generateDeviceFingerprint() {
   return `fp-${Math.abs(hash).toString(36)}-${browser.toLowerCase().replace(/\s/g, '')}-${os.toLowerCase().replace(/\s/g, '')}`
 }
 
-// Format serial key
+// Format serial key - preserve natural dash positions
 function formatSerialKey(value: string, isPaste: boolean = false): string {
   if (isPaste) return value.toUpperCase().trim()
-  const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 25)
-  const parts = []
-  for (let i = 0; i < cleaned.length; i += 5) {
-    parts.push(cleaned.slice(i, i + 5))
-  }
-  return parts.join('-')
+  // Allow alphanumeric and dashes, uppercase, trim to reasonable length
+  return value.replace(/[^A-Za-z0-9-]/g, '').toUpperCase().slice(0, 30)
 }
 
 // localStorage helpers for device activation persistence
